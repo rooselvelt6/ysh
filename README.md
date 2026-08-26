@@ -328,72 +328,138 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - 0 warnings, 0 errors
 
 ### FASE 5: Notificaciones
-- Email SMTP (lettre)
-- Push notifications (FCM)
-- In-app notifications realtime
-- Digest emails
+- Email SMTP transaccional (lettre): verificación, reset, welcome
+- Push notifications (FCM) para Android/Web
+- In-app notifications con preferencias granulares
+- Digest emails (resumen semanal de actividad)
+- Notification queue con retry y dead-letter
+- Template engine para emails HTML
 
 ### FASE 6: WebSocket + Matching Realtime
+- WebSocket connections con tokio-tungstenite
 - Matching queue en tiempo real
 - 15-second timer con opción de extender
 - Random match / Filtered match / AI match
-- Knock Knock / Duo mode
-- Presence system
-- Chat E2E encriptado
+- Knock Knock mode (texto primero, luego video)
+- Duo mode (invitar amigo)
+- Presence system (online, typing, away)
+- Chat E2E encriptado (AES-256-GCM por mensaje)
+- Read receipts, typing indicators
+- Message persistence + history
 
 ### FASE 7: WebRTC + Streaming
-- LiveKit Server + SDK
-- P2P calls, Flash calls, Duo, Group
-- Live streaming (LiveKit SFU)
+- LiveKit Server + SDK integration
+- P2P calls voz/video (1:1)
+- Flash calls (llamada rápida aleatoria)
+- Duo calls (3 personas)
+- Group calls (hasta 8 personas)
+- Live streaming (1 a muchos via LiveKit SFU)
 - Screen sharing
-- Call recording
-- Quality metrics + Simulcast
-- Billing por duración
+- Call recording (opt-in, encrypted storage)
+- Quality metrics + Simulcast automático
+- Billing por duración (débito wallet)
 
 ### FASE 8: Economía + Pagos Cripto
 - YSH Coins (compra, earn, gasto, staking)
 - Gift Economy con rarity + NFTs
-- Flash Call Economy
-- Binance Integration (deposits, withdrawals)
-- Commission Engine multi-nivel
-- Payout System automático
+- Flash Call Economy (hosts ganan por llamadas)
+- Binance Integration (BTC/ETH/USDT/BNB deposits/withdrawals)
+- Commission Engine multi-nivel (hasta 40%, 4 niveles)
+- Payout System automático a crypto wallet
+- Transaction history + receipts
+- Anti-fraud detection en transacciones
 
 ### FASE 9: Motor de IA
 - Redes Neuronales (Burn): Matching, Deepfake, NSFW, Churn, Pricing
-- Algoritmos Genéticos: optimización de parámetros
-- Enjambre (ABC/ACO): balanceo de carga
-- Lógica Difusa: clasificación de usuarios, QoS
+- Algoritmos Genéticos: optimización de parámetros de matching
+- Enjambre (ABC/ACO): balanceo de carga entre servidores
+- Lógica Difusa: clasificación de usuarios, QoS adaptativa
 - Recocido Simulado: optimización de recursos
-- Heurísticas: anomalías, fraud, patrones
-- Moderación IA: text + video + auto-report
-- A/B Testing Framework
+- Heurísticas: anomalías, fraud detection, patrones
+- Moderación IA: text + video + auto-report + human review
+- A/B Testing Framework para features
 
 ### FASE 10: Frontend (Leptos + Tailwind)
-- Layout responsive
-- Discover Page (matching random)
-- Live Streaming UI
-- Video Call UI
-- Moments Feed
-- Agency Dashboard
-- Wallet + Gift Shop
-- Componentes UI completos
+- Layout responsive (mobile-first)
+- Auth pages (login, register, 2FA, forgot password)
+- Discover Page (matching random con timer)
+- Live Streaming UI (con controles de host)
+- Video Call UI (P2P + group)
+- Moments Feed (create, like, comment, share)
+- Agency Dashboard (analytics, members, payouts)
+- Wallet + Gift Shop (balance, history, catalog)
+- Profile pages (edit, view, verification badge)
+- Componentes UI completos (Button, Modal, Toast, etc.)
 - Dark/Light mode
-- PWA + offline support
+- PWA + offline support (service worker)
 
-### FASE 11: Background Jobs + Testing
-- Payout, Analytics, Moderation, Staking, Cleanup workers
-- Unit tests (80%+), Integration, E2E
-- Load testing, Security testing (OWASP)
-- Mutation testing, Property-based testing
+### FASE 11: Internationalization (i18n)
+- Fluent (fluent-rs) integration completa
+- 5 idiomas: Español, English, Português, العربية, Français
+- Auto-detección de idioma del browser (Accept-Language)
+- RTL support completo para árabe (layout + components)
+- Dynamic locale switching sin reload
+- Date/time formatting por locale (chrono + fluent)
+- Number/currency formatting por locale
+- Plural rules por idioma (fluent bundles)
+- Translation management (keys, fallback chain)
+- Admin panel para traducciones (CRUD de strings)
 
-### FASE 12: Deploy + Monitoring
-- Dockerfile multi-stage
-- docker-compose (dev + prod)
-- CI/CD (GitHub Actions)
-- SSL/TLS (Let's Encrypt)
-- Prometheus + Grafana
-- Structured logging (JSON)
-- Security hardening (cargo-audit, DDoS protection)
+### FASE 12: Social Features + Moderación
+- User blocks (bloquear usuarios, ocultar contenido)
+- User reports (reportar contenido/usuarios con categorías)
+- Verification badges (email, identity, agency, host)
+- User reputation system (rating por interacciones)
+- Content flags (NSFW, spam, scam — auto + manual)
+- Shadow ban (usuario no ve su contenido bloqueado)
+- Appeal system (apelar bans con review humano)
+- Moderation queue priorizada por severidad
+- Auto-moderation rules configurables
+- Trust score por usuario (factores: tiempo, verificación, reports)
+
+### FASE 13: Background Jobs + Testing
+- Payout worker (pagos automáticos programados)
+- Analytics worker (métricas en background)
+- Moderation worker (scan de contenido pendiente)
+- Staking worker (cálculo de intereses)
+- Cleanup worker (tokens expirados, datos temporales)
+- Notification sender worker (cola de emails/push)
+- Unit tests (80%+ coverage)
+- Integration tests (API end-to-end)
+- Load testing (carga concurrente)
+- Security testing (OWASP Top 10)
+- Mutation testing (mutmut)
+- Property-based testing (proptest)
+
+### FASE 14: Analytics + Admin Dashboard
+- Real-time metrics (conexiones activas, llamadas, revenue)
+- User analytics (DAU, MAU, retention, churn)
+- Revenue analytics (MRR, ARPU, LTV, gift economy metrics)
+- Agency performance dashboards
+- Host performance leaderboards
+- Geographic distribution maps
+- Moderation metrics (reports, bans, appeals)
+- System health dashboard (CPU, memory, DB, cache)
+- Export to CSV/JSON
+- Custom date ranges + filters
+
+### FASE 15: Deploy + Monitoring
+- Dockerfile multi-stage (build + runtime optimizado)
+- docker-compose (dev + staging + prod)
+- CI/CD pipeline (GitHub Actions)
+  - Lint (clippy) → Check (0 warnings) → Test → Build → Deploy
+- SSL/TLS (Let's Encrypt + certbot auto-renewal)
+- Prometheus metrics + Grafana dashboards
+- Structured logging (JSON) + ELK stack
+- Security hardening:
+  - cargo-audit (dependency vulnerabilities)
+  - cargo-deny (license + supply chain)
+  - DDoS protection (rate limits + connection limits)
+  - Firewall rules (iptables/nftables)
+- Backup strategy (SQLite snapshots + S3 offsite)
+- Horizontal scaling (load balancer + multiple instances)
+- Health monitoring + alerting (PagerDuty/Slack)
+- Runbook documentation
 
 ---
 
