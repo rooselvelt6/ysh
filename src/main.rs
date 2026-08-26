@@ -1,5 +1,6 @@
 mod actors;
 mod auth;
+mod cache;
 mod config;
 mod db;
 mod middleware;
@@ -11,6 +12,7 @@ use anyhow::Result;
 use tokio::signal;
 use tokio::sync::watch;
 
+use crate::cache::{Cache, RateLimitCache, SessionCache};
 use crate::middleware::circuit_breaker::CircuitBreaker;
 use crate::middleware::rate_limit::create_rate_limiter;
 use crate::security::keys::{Ed25519KeyPair, X25519KeyPair};
@@ -58,6 +60,22 @@ async fn main() -> Result<()> {
         encrypted_key.as_bytes().len()
     );
 
+    tracing::info!("Initializing database...");
+    let db = std::sync::Arc::new(db::Database::new("ysh.db")?);
+    tracing::info!("Database initialized");
+
+    tracing::info!("Initializing cache...");
+    std::fs::create_dir_all("data/cache")?;
+    std::fs::create_dir_all("data/sessions")?;
+    std::fs::create_dir_all("data/ratelimit")?;
+    let cache = std::sync::Arc::new(Cache::open("data/cache")?);
+    let session_cache = std::sync::Arc::new(SessionCache::new(Cache::open("data/sessions")?));
+    let rate_limit_cache = std::sync::Arc::new(RateLimitCache::new(Cache::open("data/ratelimit")?));
+    cache.set_string("startup:test", "ok")?;
+    let test_val = cache.get_string("startup:test")?.unwrap_or_default();
+    tracing::info!("Cache initialized (sled KV, startup test: {})", test_val);
+    cache.delete("startup:test")?;
+
     tracing::info!("Starting actors...");
     let (supervisor, _supervisor_handle) = ractor::Actor::spawn(
         Some("supervisor-tree".to_string()),
@@ -84,6 +102,7 @@ async fn main() -> Result<()> {
         Some("database-actor".to_string()),
         actors::database_actor::DatabaseActor,
         (
+            db.clone(),
             ysh_config.database.url.clone(),
             ysh_config.database.max_connections,
         ),
@@ -128,9 +147,9 @@ async fn main() -> Result<()> {
     let _ = supervisor.send_message(SupervisorTreeMsg::Shutdown);
     let _ = config_actor.send_message(ConfigActorMsg::Reload);
     let _ = config_actor.send_message(ConfigActorMsg::ConfigChanged("config/default.lua".into()));
-    let _ = db_actor.send_message(DatabaseActorMsg::Connect);
-    let _ = db_actor.send_message(DatabaseActorMsg::Query("SELECT 1".into()));
-    let _ = db_actor.send_message(DatabaseActorMsg::Disconnect);
+    let _ = db_actor.send_message(DatabaseActorMsg::HealthCheck);
+    let _ = db_actor.send_message(DatabaseActorMsg::QueryCount);
+    let _ = db_actor.send_message(DatabaseActorMsg::GetStats);
     let _ = crypto_actor.send_message(CryptoActorMsg::RotateKeys);
     let _ = crypto_actor.send_message(CryptoActorMsg::Encrypt {
         plaintext: b"YSH startup probe".to_vec(),
@@ -208,7 +227,10 @@ async fn main() -> Result<()> {
 
     let state = server::AppState {
         config: config_ref.clone(),
-        db: std::sync::Arc::new(db::Database::new("ysh.db")?),
+        db: db.clone(),
+        cache: cache.clone(),
+        session_cache,
+        rate_limit_cache,
         secure_jwt_secret,
         secure_encryption_key,
         encrypted_key,
@@ -216,8 +238,6 @@ async fn main() -> Result<()> {
         rate_limiter,
         circuit_breaker,
     };
-
-    tracing::info!("Database initialized");
 
     let app = server::build_router(state);
 

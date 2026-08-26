@@ -448,4 +448,27 @@ impl Database {
         }
         Ok(())
     }
+
+    pub fn health_check(&self) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute_batch("SELECT 1")?;
+        Ok(())
+    }
+
+    pub fn user_count(&self) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM users", [], |row| row.get(0))?;
+        Ok(count)
+    }
+
+    pub fn session_count(&self) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM devices",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(count)
+    }
 }

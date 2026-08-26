@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
 use crate::actors::session_supervisor::SessionSupervisorMsg;
+use crate::cache::{Cache, RateLimitCache, SessionCache};
 use crate::config::YshConfig;
 use crate::db::Database;
 use crate::middleware::circuit_breaker::CircuitBreaker;
@@ -21,6 +22,9 @@ use crate::security::zeroize::{EncryptedKey, SecureBuffer, SecureString};
 pub struct AppState {
     pub config: Arc<YshConfig>,
     pub db: Arc<Database>,
+    pub cache: Arc<Cache>,
+    pub session_cache: Arc<SessionCache>,
+    pub rate_limit_cache: Arc<RateLimitCache>,
     pub secure_jwt_secret: SecureString,
     pub secure_encryption_key: SecureBuffer,
     pub encrypted_key: EncryptedKey,
@@ -148,7 +152,25 @@ async fn rate_limit_middleware(
     request: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    state.rate_limiter.until_ready().await;
+    let ip = request
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("direct");
+    let key = format!("{}:{}", ip, request.uri().path());
+
+    match state.rate_limit_cache.check_rate_limit(&key, 100, std::time::Duration::from_secs(60)) {
+        Ok(result) => {
+            if !result.allowed {
+                tracing::warn!("Rate limit exceeded for {}", key);
+                return Err(StatusCode::TOO_MANY_REQUESTS);
+            }
+        }
+        Err(e) => {
+            tracing::error!("Rate limit check failed: {}, falling back", e);
+            state.rate_limiter.until_ready().await;
+        }
+    }
     Ok(next.run(request).await)
 }
 
@@ -173,12 +195,32 @@ async fn health_check() -> axum::Json<serde_json::Value> {
     }))
 }
 
-async fn readiness_check() -> axum::Json<serde_json::Value> {
+async fn readiness_check(State(state): State<AppState>) -> axum::Json<serde_json::Value> {
+    let db_ok = state.db.health_check().is_ok();
+    let cache_ok = state.cache.health_check().is_ok();
+    let user_count = state.db.user_count().unwrap_or(0);
+    let cache_stats = state.cache.stats();
+    let session_ok = state.session_cache.health_check().is_ok();
+    let rate_limit_ok = state.rate_limit_cache.health_check().is_ok();
+    let ready = db_ok && cache_ok && session_ok && rate_limit_ok;
     axum::Json(serde_json::json!({
-        "status": "ready",
-        "database": true,
-        "cache": true,
-        "actors": true,
+        "status": if ready { "ready" } else { "not_ready" },
+        "database": {
+            "healthy": db_ok,
+            "users": user_count,
+        },
+        "cache": {
+            "healthy": cache_ok,
+            "entries": cache_stats.total_entries,
+            "bytes": cache_stats.total_bytes,
+        },
+        "session_store": {
+            "healthy": session_ok,
+        },
+        "rate_limiter": {
+            "healthy": rate_limit_ok,
+        },
+        "version": env!("CARGO_PKG_VERSION"),
     }))
 }
 

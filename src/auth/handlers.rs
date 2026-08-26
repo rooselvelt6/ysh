@@ -164,6 +164,12 @@ pub async fn login(
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    let _ = state.session_cache.store_session(
+        &access_token,
+        &user.id.to_string(),
+        std::time::Duration::from_secs(86400),
+    );
+
     let refresh_token = create_refresh_token(
         &user.id.to_string(),
         &user.role,
