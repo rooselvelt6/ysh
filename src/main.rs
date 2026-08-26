@@ -1,5 +1,7 @@
 mod actors;
+mod auth;
 mod config;
+mod db;
 mod health;
 mod middleware;
 mod observability;
@@ -74,12 +76,19 @@ async fn main() -> Result<()> {
     )
     .await?;
 
-    tracing::info!(
-        "All actors started. Spawning {} server workers",
-        ysh_config.server.workers
-    );
+    tracing::info!("All actors started. Spawning {} server workers", ysh_config.server.workers);
 
-    let app = server::build_router(config_ref.clone());
+    tracing::info!("Initializing database...");
+    let database = db::Database::new("ysh.db")?;
+    let db_ref = std::sync::Arc::new(database);
+    tracing::info!("Database initialized");
+
+    let state = server::AppState {
+        config: config_ref,
+        db: db_ref,
+    };
+
+    let app = server::build_router(state);
 
     let addr = format!("{}:{}", ysh_config.server.host, ysh_config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
