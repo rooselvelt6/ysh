@@ -206,10 +206,16 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - **CORS** — tower-http CorsLayer configurable
 - **Device fingerprinting** — Blake3 hash de user-agent + accept-language + accept-encoding
 
-### Base de Datos
-- **SQLite WAL** — Write-Ahead Logging para concurrencia
+### Base de Datos y Caché
+- **SQLite WAL** — Write-Ahead Logging para concurrencia, foreign keys habilitadas
 - **Schema migrations** — Tablas: users, recovery_codes, consent_records, devices
 - **Prepared statements** — Prevención de SQL injection
+- **DatabaseActor real** — Hold `Arc<Database>`, maneja HealthCheck, QueryCount, GetStats
+- **Sled KV cache** — Store embedded key-value con TTL, 64MB capacity, flush cada 1s
+- **SessionCache** — Almacena tokens JWT con TTL de 24h
+- **RateLimitCache** — Rate limiting por IP con TTL de 60s, fallback a governor
+- **Cache serialization** — Binary format con expiry, soporte TTL + increment atómico
+- **Health checks** — `/readyz` verifica DB, cache, session store y rate limiter en tiempo real
 
 ### APIs Implementadas (todas funcionales y probadas)
 | Endpoint | Método | Descripción |
@@ -257,12 +263,14 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - Security headers middleware completo
 - Todas las APIs probadas y funcionando end-to-end
 
-### FASE 3: Base de Datos + Caché
-- SQLx con SQLite/PostgreSQL
-- Valkey (fred.rs) para sessions, rate limiting, Pub/Sub
-- Sled para offline data, queues
-- Object Storage (S3-compatible)
-- Connection pool con health checks
+### FASE 3: Base de Datos + Caché ✅
+- SQLite con WAL mode y prepared statements
+- Database actor real con health checks y stats
+- Sled embedded KV cache con TTL (64MB capacity, flush cada 1s)
+- SessionCache para almacenamiento de tokens JWT
+- RateLimitCache para rate limiting por IP (con governor fallback)
+- /readyz health check real: DB + cache + session store + rate limiter
+- Cache probado en startup (set/get/delete cycle)
 
 ### FASE 4: Backend API
 - API REST completa versionada (v1/v2)
