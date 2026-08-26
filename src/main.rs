@@ -9,6 +9,7 @@ mod notification;
 mod observability;
 mod security;
 mod server;
+mod ws;
 
 use anyhow::Result;
 use tokio::signal;
@@ -243,6 +244,14 @@ async fn main() -> Result<()> {
     );
     let circuit_breaker = CircuitBreaker::new(5, std::time::Duration::from_secs(30));
 
+    let ws_connections = std::sync::Arc::new(tokio::sync::Mutex::new(
+        crate::ws::ConnectionManager::new(),
+    ));
+    let read_receipts = std::sync::Arc::new(tokio::sync::Mutex::new(
+        std::collections::HashMap::<(i64, i64), i64>::new(),
+    ));
+    let (match_tx, _match_rx) = tokio::sync::mpsc::unbounded_channel::<crate::ws::MatchEvent>();
+
     let state = server::AppState {
         config: config_ref.clone(),
         db: db.clone(),
@@ -256,6 +265,9 @@ async fn main() -> Result<()> {
         notification_actor,
         rate_limiter,
         circuit_breaker,
+        ws_connections,
+        read_receipts,
+        match_tx,
     };
 
     let app = server::build_router(state);

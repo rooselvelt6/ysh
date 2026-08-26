@@ -252,7 +252,55 @@ impl Database {
                 active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            );",
+            );
+
+            CREATE TABLE IF NOT EXISTS chat_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_type TEXT NOT NULL DEFAULT 'direct',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS chat_participants (
+                session_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                joined_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (session_id, user_id),
+                FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                sender_id INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                msg_type TEXT NOT NULL DEFAULT 'text',
+                encrypted INTEGER NOT NULL DEFAULT 0,
+                read INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
+                FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS matching_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                mode TEXT NOT NULL DEFAULT 'random',
+                preferences TEXT NOT NULL DEFAULT '{}',
+                status TEXT NOT NULL DEFAULT 'waiting',
+                queued_at TEXT NOT NULL DEFAULT (datetime('now')),
+                matched_at TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_messages_read ON messages(session_id, sender_id, read);
+            CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read);
+            CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_moments_feed ON moments(user_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_matching_queue ON matching_queue(status, mode);
+            CREATE INDEX IF NOT EXISTS idx_chat_participants ON chat_participants(user_id);",
         )?;
         Ok(())
     }
@@ -1510,5 +1558,276 @@ impl Database {
             params![user_id, token],
         )?;
         Ok(updated > 0)
+    }
+
+    pub fn create_chat_session(&self, session_type: &str, user_ids: &[i64]) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO chat_sessions (session_type) VALUES (?1)",
+            params![session_type],
+        )?;
+        let session_id = conn.last_insert_rowid();
+        for uid in user_ids {
+            conn.execute(
+                "INSERT INTO chat_participants (session_id, user_id) VALUES (?1, ?2)",
+                params![session_id, uid],
+            )?;
+        }
+        Ok(session_id)
+    }
+
+    pub fn find_direct_session(&self, user_a: i64, user_b: i64) -> Result<Option<i64>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT cp1.session_id
+             FROM chat_participants cp1
+             JOIN chat_participants cp2 ON cp1.session_id = cp2.session_id
+             JOIN chat_sessions cs ON cs.id = cp1.session_id
+             WHERE cp1.user_id = ?1 AND cp2.user_id = ?2 AND cs.session_type = 'direct'",
+            params![user_a, user_b],
+            |row| row.get::<_, i64>(0),
+        );
+        match result {
+            Ok(id) => Ok(Some(id)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn get_user_sessions(&self, user_id: i64) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT cs.id, cs.session_type, cs.created_at, cs.updated_at
+             FROM chat_sessions cs
+             JOIN chat_participants cp ON cp.session_id = cs.id
+             WHERE cp.user_id = ?1
+             ORDER BY cs.updated_at DESC",
+        )?;
+        let rows = stmt.query_map(params![user_id], |row| {
+            let sid: i64 = row.get(0)?;
+            Ok(serde_json::json!({
+                "session_id": sid,
+                "type": row.get::<_, String>(1)?,
+                "created_at": row.get::<_, String>(2)?,
+                "updated_at": row.get::<_, String>(3)?,
+            }))
+        })?;
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row?);
+        }
+        for s in &mut sessions {
+            let sid = s["session_id"].as_i64().unwrap_or(0);
+            let participants = self.get_session_participants(sid)?;
+            s["participants"] = serde_json::json!(participants);
+        }
+        Ok(sessions)
+    }
+
+    pub fn get_session_participants(&self, session_id: i64) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT cp.user_id, u.username
+             FROM chat_participants cp
+             JOIN users u ON u.id = cp.user_id
+             WHERE cp.session_id = ?1",
+        )?;
+        let rows = stmt.query_map(params![session_id], |row| {
+            Ok(serde_json::json!({
+                "user_id": row.get::<_, i64>(0)?,
+                "username": row.get::<_, String>(1)?,
+            }))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn send_message(
+        &self,
+        session_id: i64,
+        sender_id: i64,
+        content: &str,
+        msg_type: &str,
+        encrypted: bool,
+    ) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO messages (session_id, sender_id, content, msg_type, encrypted)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![session_id, sender_id, content, msg_type, encrypted as i32],
+        )?;
+        conn.execute(
+            "UPDATE chat_sessions SET updated_at = datetime('now') WHERE id = ?1",
+            params![session_id],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn get_messages(
+        &self,
+        session_id: i64,
+        limit: i64,
+        before_id: Option<i64>,
+    ) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        if let Some(before) = before_id {
+            let mut stmt = conn.prepare(
+                "SELECT m.id, m.sender_id, u.username, m.content, m.msg_type,
+                        m.encrypted, m.read, m.created_at
+                 FROM messages m
+                 JOIN users u ON u.id = m.sender_id
+                 WHERE m.session_id = ?1 AND m.id < ?2
+                 ORDER BY m.id DESC LIMIT ?3",
+            )?;
+            let rows = stmt.query_map(params![session_id, before, limit], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "sender_id": row.get::<_, i64>(1)?,
+                    "username": row.get::<_, String>(2)?,
+                    "content": row.get::<_, String>(3)?,
+                    "type": row.get::<_, String>(4)?,
+                    "encrypted": row.get::<_, i32>(5)? != 0,
+                    "read": row.get::<_, i32>(6)? != 0,
+                    "created_at": row.get::<_, String>(7)?,
+                }))
+            })?;
+            Ok(rows.filter_map(|r| r.ok()).collect())
+        } else {
+            let mut stmt = conn.prepare(
+                "SELECT m.id, m.sender_id, u.username, m.content, m.msg_type,
+                        m.encrypted, m.read, m.created_at
+                 FROM messages m
+                 JOIN users u ON u.id = m.sender_id
+                 WHERE m.session_id = ?1
+                 ORDER BY m.id DESC LIMIT ?2",
+            )?;
+            let rows = stmt.query_map(params![session_id, limit], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "sender_id": row.get::<_, i64>(1)?,
+                    "username": row.get::<_, String>(2)?,
+                    "content": row.get::<_, String>(3)?,
+                    "type": row.get::<_, String>(4)?,
+                    "encrypted": row.get::<_, i32>(5)? != 0,
+                    "read": row.get::<_, i32>(6)? != 0,
+                    "created_at": row.get::<_, String>(7)?,
+                }))
+            })?;
+            Ok(rows.filter_map(|r| r.ok()).collect())
+        }
+    }
+
+    pub fn mark_messages_read(&self, session_id: i64, user_id: i64) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        let updated = conn.execute(
+            "UPDATE messages SET read = 1 WHERE session_id = ?1 AND sender_id != ?2 AND read = 0",
+            params![session_id, user_id],
+        )?;
+        Ok(updated as usize)
+    }
+
+    pub fn get_unread_message_count(&self, user_id: i64) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM messages m
+             JOIN chat_participants cp ON cp.session_id = m.session_id
+             WHERE cp.user_id = ?1 AND m.sender_id != ?1 AND m.read = 0",
+            params![user_id],
+            |row| row.get(0),
+        )?;
+        Ok(count)
+    }
+
+    pub fn enqueue_match(
+        &self,
+        user_id: i64,
+        mode: &str,
+        preferences: &str,
+    ) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "DELETE FROM matching_queue WHERE user_id = ?1 AND status = 'waiting'",
+            params![user_id],
+        )?;
+        conn.execute(
+            "INSERT INTO matching_queue (user_id, mode, preferences) VALUES (?1, ?2, ?3)",
+            params![user_id, mode, preferences],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn dequeue_match(&self, user_id: i64) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let updated = conn.execute(
+            "DELETE FROM matching_queue WHERE user_id = ?1 AND status = 'waiting'",
+            params![user_id],
+        )?;
+        Ok(updated > 0)
+    }
+
+    pub fn find_match(
+        &self,
+        exclude_user_id: i64,
+        mode: &str,
+    ) -> Result<Option<i64>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT user_id FROM matching_queue
+             WHERE status = 'waiting' AND mode = ?1 AND user_id != ?2
+             ORDER BY queued_at ASC LIMIT 1",
+            params![mode, exclude_user_id],
+            |row| row.get::<_, i64>(0),
+        );
+        match result {
+            Ok(uid) => Ok(Some(uid)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn find_random_match(&self, exclude_user_id: i64) -> Result<Option<i64>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT user_id FROM matching_queue
+             WHERE status = 'waiting' AND user_id != ?1
+             ORDER BY RANDOM() LIMIT 1",
+            params![exclude_user_id],
+            |row| row.get::<_, i64>(0),
+        );
+        match result {
+            Ok(uid) => Ok(Some(uid)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn complete_match(&self, queue_id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE matching_queue SET status = 'matched', matched_at = datetime('now') WHERE id = ?1",
+            params![queue_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_queue_size(&self) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM matching_queue WHERE status = 'waiting'",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(count)
+    }
+
+    #[allow(dead_code)]
+    pub fn get_pending_match_count(&self) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM matching_queue WHERE status = 'waiting'",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(count)
     }
 }

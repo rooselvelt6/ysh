@@ -1,5 +1,6 @@
 pub mod admin;
 pub mod agency;
+pub mod chat;
 pub mod gift;
 pub mod host;
 pub mod moment;

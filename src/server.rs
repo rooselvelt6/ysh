@@ -18,6 +18,7 @@ use crate::db::Database;
 use crate::middleware::circuit_breaker::CircuitBreaker;
 use crate::middleware::rate_limit::GlobalRateLimiter;
 use crate::security::zeroize::{EncryptedKey, SecureBuffer, SecureString};
+use crate::ws::{ConnectionManager, MatchEvent, WsAuthQuery};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -33,6 +34,9 @@ pub struct AppState {
     pub notification_actor: ractor::ActorRef<NotificationMsg>,
     pub rate_limiter: GlobalRateLimiter,
     pub circuit_breaker: CircuitBreaker,
+    pub ws_connections: Arc<tokio::sync::Mutex<ConnectionManager>>,
+    pub read_receipts: Arc<tokio::sync::Mutex<std::collections::HashMap<(i64, i64), i64>>>,
+    pub match_tx: tokio::sync::mpsc::UnboundedSender<MatchEvent>,
 }
 
 pub fn build_router(state: AppState) -> Router {
@@ -235,6 +239,32 @@ pub fn build_router(state: AppState) -> Router {
             post(crate::api::notification::send_test_notification),
         );
 
+    let chat_routes = Router::new()
+        .route(
+            "/chat/sessions",
+            get(crate::api::chat::list_sessions),
+        )
+        .route(
+            "/chat/session",
+            post(crate::api::chat::create_session),
+        )
+        .route(
+            "/chat/session/{session_id}/messages",
+            get(crate::api::chat::get_messages),
+        )
+        .route(
+            "/chat/session/{session_id}/read",
+            post(crate::api::chat::mark_read),
+        )
+        .route(
+            "/chat/unread",
+            get(crate::api::chat::unread_count),
+        )
+        .route(
+            "/chat/online",
+            get(crate::api::chat::online_users),
+        );
+
     let config_routes = Router::new().route("/config", get(get_config));
 
     let api_routes = Router::new()
@@ -252,7 +282,8 @@ pub fn build_router(state: AppState) -> Router {
         .merge(gift_routes)
         .merge(moment_routes)
         .merge(admin_routes)
-        .merge(notification_routes);
+        .merge(notification_routes)
+        .merge(chat_routes);
 
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::any())
@@ -266,8 +297,12 @@ pub fn build_router(state: AppState) -> Router {
         .allow_headers(Any)
         .max_age(std::time::Duration::from_secs(3600));
 
+    let ws_routes = Router::new()
+        .route("/ws", get(ws_upgrade_handler));
+
     Router::new()
         .merge(health_routes)
+        .merge(ws_routes)
         .nest("/api/v1", api_routes)
         .layer(middleware::from_fn(
             crate::middleware::security_headers::security_headers_middleware,
@@ -377,4 +412,12 @@ async fn get_config(State(state): State<AppState>) -> axum::Json<serde_json::Val
             "algorithm": config.encryption.algorithm,
         },
     }))
+}
+
+async fn ws_upgrade_handler(
+    ws: axum::extract::ws::WebSocketUpgrade,
+    axum::extract::Query(query): axum::extract::Query<WsAuthQuery>,
+    State(state): State<AppState>,
+) -> axum::response::Response {
+    ws.on_upgrade(move |socket| crate::ws::handle_ws(socket, query, state))
 }
