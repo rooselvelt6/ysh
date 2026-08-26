@@ -29,10 +29,15 @@ where
             .strip_prefix("Bearer ")
             .ok_or(StatusCode::UNAUTHORIZED)?;
 
-        let secret = std::env::var("YSH_JWT_SECRET").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let secret =
+            std::env::var("YSH_JWT_SECRET").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         let claims =
             validate_token(token, secret.as_bytes()).map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+        if claims.kind == "2fa_pending" {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
 
         Ok(AuthUser {
             user_id: claims.sub,

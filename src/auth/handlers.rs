@@ -1,4 +1,5 @@
 use axum::{extract::State, http::StatusCode, Json};
+use base64::Engine;
 use serde::Deserialize;
 
 use crate::actors::session_supervisor::SessionSupervisorMsg;
@@ -17,14 +18,6 @@ pub struct RegisterRequest {
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
-}
-
-#[derive(serde::Serialize)]
-pub struct AuthResponse {
-    pub access_token: String,
-    pub refresh_token: String,
-    pub token_type: String,
-    pub expires_in: u64,
 }
 
 #[derive(serde::Serialize)]
@@ -87,18 +80,75 @@ pub async fn register(
 pub async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
-) -> Result<Json<AuthResponse>, (StatusCode, String)> {
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let user = state
         .db
         .find_user_by_username(&req.username)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Invalid credentials".into()))?;
 
+    if let Some(ref locked_until) = user.locked_until {
+        if let Ok(lock_time) =
+            chrono::DateTime::parse_from_rfc3339(locked_until)
+        {
+            if chrono::Utc::now() < lock_time.with_timezone(&chrono::Utc) {
+                return Err((
+                    StatusCode::TOO_MANY_REQUESTS,
+                    "Account locked. Try again later.".into(),
+                ));
+            }
+        }
+    }
+
     let valid = verify_password(&req.password, &user.password_hash)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if !valid {
+        let new_attempts = user.failed_login_attempts + 1;
+        if new_attempts >= 5 {
+            let lock_until =
+                (chrono::Utc::now() + chrono::Duration::minutes(15)).to_rfc3339();
+            state
+                .db
+                .lock_account(user.id, &lock_until)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        }
+        state
+            .db
+            .set_failed_attempts(user.id, new_attempts)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         return Err((StatusCode::UNAUTHORIZED, "Invalid credentials".into()));
+    }
+
+    state
+        .db
+        .reset_failed_attempts(user.id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let _ = state
+        .session_actor
+        .send_message(SessionSupervisorMsg::SessionStarted {
+            user_id: user.id.to_string(),
+        });
+
+    let user_agent = "unknown".to_string();
+    let fingerprint = crate::security::device::compute_fingerprint(&user_agent, "", "");
+    let _ = state.db.store_device(user.id, &fingerprint, &user_agent);
+
+    if user.totp_enabled {
+        let temp_token = crate::security::token::create_token_with_kind(
+            &user.id.to_string(),
+            &user.role,
+            state.secure_jwt_secret.as_str().as_bytes(),
+            "2fa_pending",
+            300,
+        )
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        return Ok(Json(serde_json::json!({
+            "requires_2fa": true,
+            "temp_token": temp_token,
+        })));
     }
 
     tracing::info!(
@@ -106,10 +156,6 @@ pub async fn login(
         req.username,
         user.created_at
     );
-
-    let _ = state.session_actor.send_message(SessionSupervisorMsg::SessionStarted {
-        user_id: user.id.to_string(),
-    });
 
     let access_token = create_token(
         &user.id.to_string(),
@@ -126,12 +172,12 @@ pub async fn login(
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(AuthResponse {
-        access_token,
-        refresh_token,
-        token_type: "Bearer".into(),
-        expires_in: 86400,
-    }))
+    Ok(Json(serde_json::json!({
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "Bearer",
+        "expires_in": 86400,
+    })))
 }
 
 pub async fn me(auth: crate::auth::jwt::AuthUser) -> Json<serde_json::Value> {
@@ -152,12 +198,6 @@ pub async fn encrypt_message(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     use crate::security::crypto::Cipher;
 
-    tracing::debug!(
-        "Encrypt with algo: {} (encrypted_key algo: {})",
-        state.config.encryption.algorithm,
-        state.encrypted_key.algorithm()
-    );
-
     let key_bytes: [u8; 32] = {
         let key_str = state.secure_encryption_key.as_bytes();
         let mut key = [0u8; 32];
@@ -166,7 +206,7 @@ pub async fn encrypt_message(
         key
     };
 
-    let cipher = match state.config.encryption.algorithm.as_str() {
+    let cipher = match state.encrypted_key.algorithm() {
         "aes-256-gcm" => Cipher::Aes(
             crate::security::crypto::AesCipher::new(&key_bytes)
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
@@ -196,8 +236,8 @@ pub async fn encrypt_message(
     };
 
     Ok(Json(serde_json::json!({
-        "ciphertext": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &ciphertext),
-        "nonce": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &nonce),
+        "ciphertext": base64::engine::general_purpose::STANDARD.encode(&ciphertext),
+        "nonce": base64::engine::general_purpose::STANDARD.encode(&nonce),
         "algorithm": state.config.encryption.algorithm,
     })))
 }
@@ -215,16 +255,12 @@ pub async fn decrypt_message(
         .as_str()
         .ok_or((StatusCode::BAD_REQUEST, "Missing nonce".into()))?;
 
-    let ciphertext = base64::Engine::decode(
-        &base64::engine::general_purpose::STANDARD,
-        ciphertext_b64,
-    )
-    .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-    let nonce_bytes = base64::Engine::decode(
-        &base64::engine::general_purpose::STANDARD,
-        nonce_b64,
-    )
-    .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let ciphertext = base64::engine::general_purpose::STANDARD
+        .decode(ciphertext_b64)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let nonce_bytes = base64::engine::general_purpose::STANDARD
+        .decode(nonce_b64)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let nonce: [u8; 12] = nonce_bytes
         .try_into()
@@ -238,7 +274,7 @@ pub async fn decrypt_message(
         key
     };
 
-    let cipher = match state.config.encryption.algorithm.as_str() {
+    let cipher = match state.encrypted_key.algorithm() {
         "aes-256-gcm" => Cipher::Aes(
             crate::security::crypto::AesCipher::new(&key_bytes)
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
@@ -264,5 +300,70 @@ pub async fn decrypt_message(
 
     Ok(Json(serde_json::json!({
         "plaintext": plaintext_str,
+    })))
+}
+
+pub async fn verify_2fa_login(
+    State(state): State<AppState>,
+    Json(req): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let temp_token = req["temp_token"]
+        .as_str()
+        .ok_or((StatusCode::BAD_REQUEST, "temp_token required".into()))?;
+    let code = req["code"]
+        .as_str()
+        .ok_or((StatusCode::BAD_REQUEST, "code required".into()))?;
+
+    let claims = crate::security::token::validate_token(
+        temp_token,
+        state.secure_jwt_secret.as_str().as_bytes(),
+    )
+    .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid or expired temp token".into()))?;
+
+    if claims.kind != "2fa_pending" {
+        return Err((StatusCode::UNAUTHORIZED, "Invalid token type".into()));
+    }
+
+    let user_id: i64 = claims
+        .sub
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
+
+    let totp_secret = state
+        .db
+        .get_totp_secret(user_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "2FA not configured".into()))?;
+
+    let secret_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&totp_secret)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !crate::security::totp::verify_code(&secret_bytes, code) {
+        return Err((StatusCode::UNAUTHORIZED, "Invalid 2FA code".into()));
+    }
+
+    tracing::info!("2FA verified for user: {}", claims.sub);
+
+    let access_token = create_token(
+        &claims.sub,
+        &claims.role,
+        state.secure_jwt_secret.as_str().as_bytes(),
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let refresh_token = create_refresh_token(
+        &claims.sub,
+        &claims.role,
+        state.secure_jwt_secret.as_str().as_bytes(),
+        30,
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "Bearer",
+        "expires_in": 86400,
     })))
 }

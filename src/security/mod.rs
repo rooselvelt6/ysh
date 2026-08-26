@@ -1,7 +1,9 @@
 pub mod crypto;
+pub mod device;
 pub mod keys;
 pub mod nonce;
 pub mod password;
 pub mod token;
 pub mod tls;
+pub mod totp;
 pub mod zeroize;
