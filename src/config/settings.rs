@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
@@ -14,6 +13,8 @@ pub struct YshConfig {
     pub database: DatabaseConfig,
     pub backpressure: BackpressureConfig,
     pub rate_limit: RateLimitConfig,
+    pub ddos: DdosConfig,
+    pub cors: CorsConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,14 +104,58 @@ pub struct RateLimitConfig {
     pub burst_size: u32,
 }
 
-impl YshConfig {
-    pub fn from_lua_table(table: mlua::Table) -> Result<Self> {
-        let json: serde_json::Value = serde_json::to_value(&table)
-            .context("Failed to convert Lua table to JSON")?;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DdosConfig {
+    pub enabled: bool,
+    pub max_body_bytes: usize,
+    pub request_timeout_secs: u64,
+    #[serde(default)]
+    pub trusted_proxies: Vec<String>,
+    #[serde(default = "default_ddos_rate_limit")]
+    pub rate_limit: DdosRateLimit,
+    #[serde(default = "default_ddos_ip_block")]
+    pub ip_block: DdosIpBlock,
+    #[serde(default = "default_ddos_ws")]
+    pub ws: DdosWs,
+}
 
-        let config: YshConfig =
-            serde_json::from_value(json).context("Failed to deserialize Lua config into YshConfig")?;
+fn default_ddos_rate_limit() -> DdosRateLimit {
+    DdosRateLimit { auth_max_per_minute: 5, api_max_per_minute: 60, ws_max_per_minute: 30, admin_max_per_minute: 120 }
+}
+fn default_ddos_ip_block() -> DdosIpBlock {
+    DdosIpBlock { auto_block_threshold: 100, auto_block_window_secs: 60, auto_block_duration_secs: 300, max_blocklist_size: 10000 }
+}
+fn default_ddos_ws() -> DdosWs {
+    DdosWs { max_connections_per_user: 3, max_message_size_bytes: 65536, heartbeat_timeout_secs: 60, message_rate_per_second: 10 }
+}
 
-        Ok(config)
-    }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DdosRateLimit {
+    pub auth_max_per_minute: u64,
+    pub api_max_per_minute: u64,
+    pub ws_max_per_minute: u64,
+    pub admin_max_per_minute: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DdosIpBlock {
+    pub auto_block_threshold: u64,
+    pub auto_block_window_secs: u64,
+    pub auto_block_duration_secs: u64,
+    pub max_blocklist_size: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DdosWs {
+    pub max_connections_per_user: u32,
+    pub max_message_size_bytes: usize,
+    pub heartbeat_timeout_secs: u64,
+    pub message_rate_per_second: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorsConfig {
+    pub allowed_origins: Vec<String>,
+    pub allowed_methods: Vec<String>,
+    pub max_age_secs: u64,
 }

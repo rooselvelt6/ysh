@@ -8,7 +8,9 @@ use axum::{
     Router,
 };
 use std::sync::Arc;
-use tower_http::cors::{AllowOrigin, Any, CorsLayer};
+use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
+use tower_http::limit::RequestBodyLimitLayer;
+use tower_http::timeout::TimeoutLayer;
 
 use crate::actors::notification_actor::NotificationMsg;
 use crate::actors::session_supervisor::SessionSupervisorMsg;
@@ -16,7 +18,10 @@ use crate::cache::{Cache, RateLimitCache, SessionCache};
 use crate::config::YshConfig;
 use crate::db::Database;
 use crate::middleware::circuit_breaker::CircuitBreaker;
-use crate::middleware::rate_limit::GlobalRateLimiter;
+use crate::middleware::ddos_protection::{extract_client_ip, DdosProtection};
+use crate::middleware::ip_blocklist::IpBlocklist;
+use crate::middleware::rate_limit::PerIpRateLimiter;
+use crate::middleware::ws_guard::WsGuard;
 use crate::security::zeroize::{EncryptedKey, SecureBuffer, SecureString};
 use crate::ws::{ConnectionManager, MatchEvent, WsAuthQuery};
 
@@ -32,11 +37,15 @@ pub struct AppState {
     pub encrypted_key: EncryptedKey,
     pub session_actor: ractor::ActorRef<SessionSupervisorMsg>,
     pub notification_actor: ractor::ActorRef<NotificationMsg>,
-    pub rate_limiter: GlobalRateLimiter,
     pub circuit_breaker: CircuitBreaker,
     pub ws_connections: Arc<tokio::sync::Mutex<ConnectionManager>>,
     pub read_receipts: Arc<tokio::sync::Mutex<std::collections::HashMap<(i64, i64), i64>>>,
     pub match_tx: tokio::sync::mpsc::UnboundedSender<MatchEvent>,
+    pub ip_blocklist: Arc<IpBlocklist>,
+    pub per_ip_limiter: Arc<PerIpRateLimiter>,
+    #[allow(dead_code)]
+    pub ws_guard: Arc<WsGuard>,
+    pub ddos_protection: DdosProtection,
 }
 
 pub fn build_router(state: AppState) -> Router {
@@ -285,8 +294,9 @@ pub fn build_router(state: AppState) -> Router {
         .merge(notification_routes)
         .merge(chat_routes);
 
-    let cors = CorsLayer::new()
-        .allow_origin(AllowOrigin::any())
+    let cors_has_wildcard = state.config.cors.allowed_origins.iter().any(|o| o == "*");
+
+    let mut cors = CorsLayer::new()
         .allow_methods([
             Method::GET,
             Method::POST,
@@ -294,11 +304,25 @@ pub fn build_router(state: AppState) -> Router {
             Method::DELETE,
             Method::OPTIONS,
         ])
-        .allow_headers(Any)
-        .max_age(std::time::Duration::from_secs(3600));
+        .allow_headers(AllowHeaders::any())
+        .max_age(std::time::Duration::from_secs(state.config.cors.max_age_secs));
+
+    if cors_has_wildcard {
+        cors = cors.allow_origin(AllowOrigin::any());
+    } else {
+        let origins: Vec<axum::http::HeaderValue> = state.config.cors.allowed_origins.iter()
+            .filter_map(|o| o.parse().ok())
+            .collect();
+        if !origins.is_empty() {
+            cors = cors.allow_origin(origins);
+        }
+    }
 
     let ws_routes = Router::new()
         .route("/ws", get(ws_upgrade_handler));
+
+    let body_limit = state.config.ddos.max_body_bytes;
+    let timeout_secs = state.config.ddos.request_timeout_secs;
 
     Router::new()
         .merge(health_routes)
@@ -308,9 +332,15 @@ pub fn build_router(state: AppState) -> Router {
             crate::middleware::security_headers::security_headers_middleware,
         ))
         .layer(cors)
+        .layer(RequestBodyLimitLayer::new(body_limit))
+        .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, std::time::Duration::from_secs(timeout_secs)))
+        .layer(middleware::from_fn_with_state(
+            state.ddos_protection.clone(),
+            crate::middleware::ddos_protection::ddos_middleware,
+        ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            rate_limit_middleware,
+            per_ip_rate_limit_middleware,
         ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
@@ -319,29 +349,18 @@ pub fn build_router(state: AppState) -> Router {
         .with_state(state)
 }
 
-async fn rate_limit_middleware(
+async fn per_ip_rate_limit_middleware(
     State(state): State<AppState>,
     request: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let ip = request
-        .headers()
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("direct");
-    let key = format!("{}:{}", ip, request.uri().path());
+    let ip = extract_client_ip(&request);
+    let path = request.uri().path().to_string();
 
-    match state.rate_limit_cache.check_rate_limit(&key, 100, std::time::Duration::from_secs(60)) {
-        Ok(result) => {
-            if !result.allowed {
-                tracing::warn!("Rate limit exceeded for {}", key);
-                return Err(StatusCode::TOO_MANY_REQUESTS);
-            }
-        }
-        Err(e) => {
-            tracing::error!("Rate limit check failed: {}, falling back", e);
-            state.rate_limiter.until_ready().await;
-        }
+    let result = state.per_ip_limiter.check(&ip, &path);
+    if !result.allowed {
+        tracing::warn!("Per-IP rate limit exceeded: {} on {}", ip, path);
+        return Err(StatusCode::TOO_MANY_REQUESTS);
     }
     Ok(next.run(request).await)
 }
@@ -391,6 +410,9 @@ async fn readiness_check(State(state): State<AppState>) -> axum::Json<serde_json
         },
         "rate_limiter": {
             "healthy": rate_limit_ok,
+        },
+        "security": {
+            "blocked_ips": state.ip_blocklist.blocked_count(),
         },
         "version": env!("CARGO_PKG_VERSION"),
     }))

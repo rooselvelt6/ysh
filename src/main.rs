@@ -12,12 +12,16 @@ mod server;
 mod ws;
 
 use anyhow::Result;
+use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::watch;
 
 use crate::cache::{Cache, RateLimitCache, SessionCache};
 use crate::middleware::circuit_breaker::CircuitBreaker;
-use crate::middleware::rate_limit::create_rate_limiter;
+use crate::middleware::ddos_protection::DdosProtection;
+use crate::middleware::ip_blocklist::IpBlocklist;
+use crate::middleware::rate_limit::PerIpRateLimiter;
+use crate::middleware::ws_guard::WsGuard;
 use crate::security::keys::{Ed25519KeyPair, X25519KeyPair};
 use crate::security::zeroize::{EncryptedKey, SecureBuffer, SecureString};
 
@@ -28,7 +32,7 @@ async fn main() -> Result<()> {
 
     let config_path = std::env::args()
         .nth(1)
-        .unwrap_or_else(|| "config/default.lua".to_string());
+        .unwrap_or_else(|| "config/default.toml".to_string());
 
     tracing::info!("Loading config from: {}", config_path);
     let ysh_config = config::load_config(&config_path)?;
@@ -78,6 +82,22 @@ async fn main() -> Result<()> {
     let test_val = cache.get_string("startup:test")?.unwrap_or_default();
     tracing::info!("Cache initialized (sled KV, startup test: {})", test_val);
     cache.delete("startup:test")?;
+
+    tracing::info!("Initializing DDoS protection...");
+    let ddos_cfg = &ysh_config.ddos;
+    let ip_blocklist = IpBlocklist::new(
+        ddos_cfg.ip_block.auto_block_threshold,
+        ddos_cfg.ip_block.auto_block_window_secs,
+        ddos_cfg.ip_block.auto_block_duration_secs,
+        ddos_cfg.ip_block.max_blocklist_size,
+    );
+    let per_ip_limiter = PerIpRateLimiter::new(
+        ddos_cfg.rate_limit.clone(),
+        ip_blocklist.clone(),
+    );
+    let ws_guard = WsGuard::new(ddos_cfg.ws.clone(), ip_blocklist.clone());
+    let ddos_protection = DdosProtection::new(Arc::new(ddos_cfg.clone()), ip_blocklist.clone());
+    tracing::info!("DDoS protection enabled (body limit: {} bytes, timeout: {}s)", ddos_cfg.max_body_bytes, ddos_cfg.request_timeout_secs);
 
     tracing::info!("Starting actors...");
     let (supervisor, _supervisor_handle) = ractor::Actor::spawn(
@@ -157,7 +177,7 @@ async fn main() -> Result<()> {
     let _ = supervisor.send_message(SupervisorTreeMsg::GetConfig);
     let _ = supervisor.send_message(SupervisorTreeMsg::Shutdown);
     let _ = config_actor.send_message(ConfigActorMsg::Reload);
-    let _ = config_actor.send_message(ConfigActorMsg::ConfigChanged("config/default.lua".into()));
+    let _ = config_actor.send_message(ConfigActorMsg::ConfigChanged("config/default.toml".into()));
     let _ = db_actor.send_message(DatabaseActorMsg::HealthCheck);
     let _ = db_actor.send_message(DatabaseActorMsg::QueryCount);
     let _ = db_actor.send_message(DatabaseActorMsg::GetStats);
@@ -238,10 +258,6 @@ async fn main() -> Result<()> {
     cb.record_failure();
     tracing::info!("Circuit breaker state: available={}", cb.is_available());
 
-    let rate_limiter = create_rate_limiter(
-        ysh_config.rate_limit.requests_per_second,
-        ysh_config.rate_limit.burst_size,
-    );
     let circuit_breaker = CircuitBreaker::new(5, std::time::Duration::from_secs(30));
 
     let ws_connections = std::sync::Arc::new(tokio::sync::Mutex::new(
@@ -263,11 +279,14 @@ async fn main() -> Result<()> {
         encrypted_key,
         session_actor,
         notification_actor,
-        rate_limiter,
         circuit_breaker,
         ws_connections,
         read_receipts,
         match_tx,
+        ip_blocklist: ip_blocklist.clone(),
+        per_ip_limiter,
+        ws_guard,
+        ddos_protection,
     };
 
     let app = server::build_router(state);

@@ -15,9 +15,9 @@ serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
 
 # ═══════════════════════════════════════════
-# CONFIG (Lua 5.4 embebido, vendored)
+# CONFIG (TOML nativo, sin Lua)
 # ═══════════════════════════════════════════
-mlua = { version = "0.10", features = ["lua54", "vendored", "serialize", "send"] }
+toml = "0.8"
 
 # ═══════════════════════════════════════════
 # ACTORS (Erlang/OTP)
@@ -73,11 +73,12 @@ metrics = "0.22"
 metrics-exporter-prometheus = "0.16"
 
 # ═══════════════════════════════════════════
-# RESILIENCIA
+# RESILIENCIA + DDoS PROTECTION
 # ═══════════════════════════════════════════
 tower = { version = "0.5", features = ["full"] }
-tower-http = { version = "0.6", features = ["cors", "trace"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "limit", "timeout"] }
 governor = "0.8"
+dashmap = "6"
 
 # ═══════════════════════════════════════════
 # HTTP SERVER
@@ -105,3 +106,8 @@ lettre = { version = "0.11", default-features = false, features = ["tokio1-rustl
 # WEBSOCKET + REALTIME
 # ═══════════════════════════════════════════
 tokio-tungstenite = "0.26"
+
+# ═══════════════════════════════════════════
+# TEST
+# ═══════════════════════════════════════════
+[dev-dependencies]

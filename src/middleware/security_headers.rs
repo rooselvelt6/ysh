@@ -25,6 +25,10 @@ pub async fn security_headers_middleware(request: Request<Body>, next: Next) -> 
     );
     let _ = headers.insert("cache-control", "no-store".parse().unwrap());
     let _ = headers.insert("x-permitted-cross-domain-policies", "none".parse().unwrap());
+    let _ = headers.insert(
+        "content-security-policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'".parse().unwrap(),
+    );
 
     response
 }

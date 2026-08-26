@@ -1595,27 +1595,31 @@ impl Database {
     }
 
     pub fn get_user_sessions(&self, user_id: i64) -> Result<Vec<serde_json::Value>> {
-        let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            "SELECT cs.id, cs.session_type, cs.created_at, cs.updated_at
-             FROM chat_sessions cs
-             JOIN chat_participants cp ON cp.session_id = cs.id
-             WHERE cp.user_id = ?1
-             ORDER BY cs.updated_at DESC",
-        )?;
-        let rows = stmt.query_map(params![user_id], |row| {
-            let sid: i64 = row.get(0)?;
-            Ok(serde_json::json!({
-                "session_id": sid,
-                "type": row.get::<_, String>(1)?,
-                "created_at": row.get::<_, String>(2)?,
-                "updated_at": row.get::<_, String>(3)?,
-            }))
-        })?;
-        let mut sessions = Vec::new();
-        for row in rows {
-            sessions.push(row?);
-        }
+        let sessions = {
+            let conn = self.conn.lock().unwrap();
+            let mut stmt = conn.prepare(
+                "SELECT cs.id, cs.session_type, cs.created_at, cs.updated_at
+                 FROM chat_sessions cs
+                 JOIN chat_participants cp ON cp.session_id = cs.id
+                 WHERE cp.user_id = ?1
+                 ORDER BY cs.updated_at DESC",
+            )?;
+            let rows = stmt.query_map(params![user_id], |row| {
+                let sid: i64 = row.get(0)?;
+                Ok(serde_json::json!({
+                    "session_id": sid,
+                    "type": row.get::<_, String>(1)?,
+                    "created_at": row.get::<_, String>(2)?,
+                    "updated_at": row.get::<_, String>(3)?,
+                }))
+            })?;
+            let mut sessions = Vec::new();
+            for row in rows {
+                sessions.push(row?);
+            }
+            sessions
+        };
+        let mut sessions = sessions;
         for s in &mut sessions {
             let sid = s["session_id"].as_i64().unwrap_or(0);
             let participants = self.get_session_participants(sid)?;

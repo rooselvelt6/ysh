@@ -140,6 +140,7 @@ impl Cache {
         Ok(new_val)
     }
 
+    #[allow(dead_code)]
     pub fn increment_with_ttl(&self, key: &str, ttl: Duration) -> Result<u64> {
         let expires_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)?
@@ -310,6 +311,7 @@ impl RateLimitCache {
         self.cache.health_check()
     }
 
+    #[allow(dead_code)]
     pub fn check_rate_limit(
         &self,
         key: &str,

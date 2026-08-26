@@ -4,7 +4,7 @@ pub struct ConfigActor;
 
 pub struct ConfigActorState {
     pub config_path: String,
-    pub lua_engine: crate::config::lua_engine::LuaEngine,
+    pub loader: crate::config::loader::ConfigLoader,
 }
 
 #[async_trait]
@@ -18,12 +18,11 @@ impl Actor for ConfigActor {
         _myself: ActorRef<Self::Msg>,
         config_path: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let lua_engine = crate::config::lua_engine::LuaEngine::new()
-            .map_err(|e| ActorProcessingErr::from(e.to_string()))?;
+        let loader = crate::config::loader::ConfigLoader::new();
         tracing::info!("ConfigActor started, watching: {}", config_path);
         Ok(ConfigActorState {
             config_path,
-            lua_engine,
+            loader,
         })
     }
 
@@ -36,7 +35,7 @@ impl Actor for ConfigActor {
         match msg {
             ConfigActorMsg::Reload => {
                 tracing::info!("Reloading config from: {}", state.config_path);
-                match state.lua_engine.reload(&state.config_path) {
+                match state.loader.reload(&state.config_path) {
                     Ok(_config) => tracing::info!("Config reloaded successfully"),
                     Err(e) => tracing::error!("Config reload failed: {}", e),
                 }
