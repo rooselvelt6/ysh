@@ -1,0 +1,83 @@
+[package]
+name = "ysh"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# ═══════════════════════════════════════════
+# CORE
+# ═══════════════════════════════════════════
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+
+# ═══════════════════════════════════════════
+# CONFIG (Lua 5.4 embebido, vendored)
+# ═══════════════════════════════════════════
+mlua = { version = "0.10", features = ["lua54", "vendored", "serialize"] }
+
+# ═══════════════════════════════════════════
+# ACTORS (Erlang/OTP)
+# ═══════════════════════════════════════════
+ractor = "0.16"
+ractor-supervisor = "0.2"
+
+# ═══════════════════════════════════════════
+# SEGURIDAD - Memoria
+# ═══════════════════════════════════════════
+zeroize = { version = "1", features = ["derive"] }
+secrecy = { version = "0.10", features = ["serde"] }
+
+# ═══════════════════════════════════════════
+# SEGURIDAD - Cifrado simetrico (AEAD)
+# ═══════════════════════════════════════════
+aes-gcm = { version = "0.10.3", features = ["zeroize"] }
+chacha20poly1305 = { version = "0.11", features = ["zeroize"] }
+
+# ═══════════════════════════════════════════
+# SEGURIDAD - Hashing de contrasenas
+# ═══════════════════════════════════════════
+argon2 = { version = "0.5", features = ["std"] }
+blake3 = "1"
+
+# ═══════════════════════════════════════════
+# SEGURIDAD - Criptografia asimetrica
+# ═══════════════════════════════════════════
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.9"
+rand_core = "0.6"
+
+# ═══════════════════════════════════════════
+# SEGURIDAD - JWT / Tokens
+# ═══════════════════════════════════════════
+jsonwebtoken = "9"
+
+# ═══════════════════════════════════════════
+# SEGURIDAD - TLS
+# ═══════════════════════════════════════════
+rustls = { version = "0.23", features = ["ring"] }
+tokio-rustls = "0.26"
+
+# ═══════════════════════════════════════════
+# OBSERVABILIDAD
+# ═══════════════════════════════════════════
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+metrics = "0.22"
+metrics-exporter-prometheus = "0.16"
+
+# ═══════════════════════════════════════════
+# RESILIENCIA
+# ═══════════════════════════════════════════
+tower = { version = "0.5", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+governor = "0.8"
+
+# ═══════════════════════════════════════════
+# HTTP SERVER
+# ═══════════════════════════════════════════
+axum = "0.8"
