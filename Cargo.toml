@@ -17,7 +17,7 @@ chrono = { version = "0.4", features = ["serde"] }
 # ═══════════════════════════════════════════
 # CONFIG (Lua 5.4 embebido, vendored)
 # ═══════════════════════════════════════════
-mlua = { version = "0.10", features = ["lua54", "vendored", "serialize"] }
+mlua = { version = "0.10", features = ["lua54", "vendored", "serialize", "send"] }
 
 # ═══════════════════════════════════════════
 # ACTORS (Erlang/OTP)
@@ -81,6 +81,7 @@ governor = "0.8"
 # HTTP SERVER
 # ═══════════════════════════════════════════
 axum = "0.8"
+base64 = "0.22"
 
 # ═══════════════════════════════════════════
 # DATABASE

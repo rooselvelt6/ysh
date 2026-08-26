@@ -1,7 +1,7 @@
 use std::ops::Deref;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-#[derive(Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct SecureBuffer {
     data: Vec<u8>,
 }
@@ -44,7 +44,7 @@ impl From<&[u8]> for SecureBuffer {
     }
 }
 
-#[derive(Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct SecureString {
     data: String,
 }
@@ -73,7 +73,7 @@ impl From<String> for SecureString {
     }
 }
 
-#[derive(Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct EncryptedKey {
     inner: Vec<u8>,
     algorithm: String,

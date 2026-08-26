@@ -4,6 +4,7 @@ use std::path::Path;
 
 use super::settings::YshConfig;
 
+#[derive(Clone)]
 pub struct LuaEngine {
     lua: Lua,
 }
@@ -29,6 +30,7 @@ impl LuaEngine {
     }
 
     pub fn reload(&self, path: &str) -> Result<YshConfig> {
+        tracing::info!("Reloading Lua config from: {}", path);
         self.load_file(path)
     }
 }

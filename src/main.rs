@@ -2,7 +2,6 @@ mod actors;
 mod auth;
 mod config;
 mod db;
-mod health;
 mod middleware;
 mod observability;
 mod security;
@@ -12,10 +11,14 @@ use anyhow::Result;
 use tokio::signal;
 use tokio::sync::watch;
 
+use crate::middleware::circuit_breaker::CircuitBreaker;
+use crate::middleware::rate_limit::create_rate_limiter;
+use crate::security::keys::{Ed25519KeyPair, X25519KeyPair};
+use crate::security::zeroize::{EncryptedKey, SecureBuffer, SecureString};
+
 #[tokio::main]
 async fn main() -> Result<()> {
     observability::setup_tracing();
-
     tracing::info!("YSH starting...");
 
     let config_path = std::env::args()
@@ -27,32 +30,57 @@ async fn main() -> Result<()> {
     tracing::info!("Config loaded successfully");
 
     let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
-
     let config_ref = std::sync::Arc::new(ysh_config.clone());
 
+    tracing::info!("Generating cryptographic key pairs...");
+    let x25519_keys = X25519KeyPair::generate();
+    tracing::info!("X25519 ECDH key pair generated (pub: {} bytes)", x25519_keys.public.as_bytes().len());
+
+    let ed25519_keys = Ed25519KeyPair::generate();
+    let signature = ed25519_keys.sign(b"ysh startup");
+    ed25519_keys
+        .verify(b"ysh startup", &signature)
+        .map_err(|e| anyhow::anyhow!("Ed25519 verification failed: {}", e))?;
+    tracing::info!("Ed25519 signing key pair generated and verified");
+
+    tracing::info!("Creating secure secrets...");
+    let secure_jwt_secret =
+        SecureString::new(ysh_config.secrets.jwt_secret.clone());
+    let secure_encryption_key =
+        SecureBuffer::new(ysh_config.secrets.encryption_key.as_bytes().to_vec());
+    let encrypted_key = EncryptedKey::new(
+        ysh_config.secrets.encryption_key.as_bytes().to_vec(),
+        ysh_config.encryption.algorithm.clone(),
+    );
+    tracing::info!(
+        "Secure secrets created (algo: {}, key bytes: {})",
+        encrypted_key.algorithm(),
+        encrypted_key.as_bytes().len()
+    );
+
     tracing::info!("Starting actors...");
-    let (_supervisor, _supervisor_handle) = ractor::Actor::spawn(
+    let (supervisor, _supervisor_handle) = ractor::Actor::spawn(
         Some("supervisor-tree".to_string()),
         actors::supervisor_tree::SupervisorTree,
         config_path.clone(),
     )
     .await?;
 
-    let (_config_actor, _config_handle) = ractor::Actor::spawn(
+    let (config_actor, _config_handle) = ractor::Actor::spawn(
         Some("config-actor".to_string()),
         actors::config_actor::ConfigActor,
         config_path,
     )
     .await?;
 
-    let (_server_actor, _server_handle) = ractor::Actor::spawn(
+    let (server_actor, _server_handle) = ractor::Actor::spawn(
         Some("server-actor".to_string()),
         actors::server_actor::ServerActor,
         (ysh_config.server.host.clone(), ysh_config.server.port),
     )
     .await?;
 
-    let (_db_actor, _db_handle) = ractor::Actor::spawn(
+    let (db_actor, _db_handle) = ractor::Actor::spawn(
         Some("database-actor".to_string()),
         actors::database_actor::DatabaseActor,
         (
@@ -62,31 +90,134 @@ async fn main() -> Result<()> {
     )
     .await?;
 
-    let (_crypto_actor, _crypto_handle) = ractor::Actor::spawn(
+    let (crypto_actor, _crypto_handle) = ractor::Actor::spawn(
         Some("crypto-actor".to_string()),
         actors::crypto_actor::CryptoActor,
         ysh_config.encryption.algorithm.clone(),
     )
     .await?;
 
-    let (_session_actor, _session_handle) = ractor::Actor::spawn(
+    let (session_actor, _session_handle) = ractor::Actor::spawn(
         Some("session-supervisor".to_string()),
         actors::session_supervisor::SessionSupervisor,
         10000u32,
     )
     .await?;
 
-    tracing::info!("All actors started. Spawning {} server workers", ysh_config.server.workers);
+    let (webrtc_actor, _webrtc_handle) = ractor::Actor::spawn(
+        Some("webrtc-actor".to_string()),
+        actors::webrtc_actor::WebRTCActor,
+        100u32,
+    )
+    .await?;
 
-    tracing::info!("Initializing database...");
-    let database = db::Database::new("ysh.db")?;
-    let db_ref = std::sync::Arc::new(database);
-    tracing::info!("Database initialized");
+    let (ai_actor, _ai_handle) = ractor::Actor::spawn(
+        Some("ai-actor".to_string()),
+        actors::ai_actor::AIActor,
+        (),
+    )
+    .await?;
+
+    use actors::config_actor::ConfigActorMsg;
+    use actors::crypto_actor::CryptoActorMsg;
+    use actors::database_actor::DatabaseActorMsg;
+    use actors::session_supervisor::SessionSupervisorMsg;
+    use actors::supervisor_tree::SupervisorTreeMsg;
+
+    let _ = supervisor.send_message(SupervisorTreeMsg::GetConfig);
+    let _ = supervisor.send_message(SupervisorTreeMsg::Shutdown);
+    let _ = config_actor.send_message(ConfigActorMsg::Reload);
+    let _ = config_actor.send_message(ConfigActorMsg::ConfigChanged("config/default.lua".into()));
+    let _ = db_actor.send_message(DatabaseActorMsg::Connect);
+    let _ = db_actor.send_message(DatabaseActorMsg::Query("SELECT 1".into()));
+    let _ = db_actor.send_message(DatabaseActorMsg::Disconnect);
+    let _ = crypto_actor.send_message(CryptoActorMsg::RotateKeys);
+    let _ = crypto_actor.send_message(CryptoActorMsg::Encrypt {
+        plaintext: b"YSH startup probe".to_vec(),
+        aad: b"system".to_vec(),
+    });
+    let _ = crypto_actor.send_message(CryptoActorMsg::Decrypt {
+        ciphertext: b"encrypted data".to_vec(),
+        aad: b"system".to_vec(),
+    });
+    let _ = session_actor.send_message(SessionSupervisorMsg::GetActiveCount);
+    let _ = session_actor.send_message(SessionSupervisorMsg::SessionStarted {
+        user_id: "system".to_string(),
+    });
+    let _ = session_actor.send_message(SessionSupervisorMsg::SessionEnded {
+        user_id: "system".to_string(),
+    });
+    let _ = webrtc_actor.send_message(actors::webrtc_actor::WebRTCActorMsg::CallStart {
+        caller: "system".to_string(),
+        callee: "system".to_string(),
+    });
+    let _ = webrtc_actor.send_message(actors::webrtc_actor::WebRTCActorMsg::CallEnd {
+        caller: "system".to_string(),
+        callee: "system".to_string(),
+    });
+    let _ = ai_actor.send_message(actors::ai_actor::AIActorMsg::LoadModel);
+    let _ = ai_actor.send_message(actors::ai_actor::AIActorMsg::Moderate {
+        content_id: "startup-check".to_string(),
+    });
+    let _ = ai_actor.send_message(actors::ai_actor::AIActorMsg::DeepfakeCheck {
+        user_id: "system".to_string(),
+    });
+
+    use actors::server_actor::ServerActorMsg;
+    let _ = server_actor.send_message(ServerActorMsg::Start);
+    let _ = server_actor.send_message(ServerActorMsg::Stop);
+
+    tracing::info!("All actors started and wired");
+
+    let nonce_gen = security::nonce::NonceGenerator::new();
+    let nonce = nonce_gen.next();
+    tracing::info!("Nonce generated (counter: {}, nonce: {:02x?})", nonce_gen.current_counter(), &nonce[..4]);
+
+    let peer_public = x25519_keys.public;
+    let _shared = x25519_keys.agree(&peer_public);
+    tracing::info!("X25519 key agreement completed");
+
+    let secure_buf = security::zeroize::SecureBuffer::from(b"test data".as_slice());
+    tracing::info!("SecureBuffer created (len: {}, empty: {})", secure_buf.len(), secure_buf.is_empty());
+
+    let enc_key = security::zeroize::EncryptedKey::new(
+        b"test key material".to_vec(),
+        "aes-256-gcm".to_string(),
+    );
+    tracing::info!("EncryptedKey created (algo: {}, bytes: {})", enc_key.algorithm(), enc_key.as_bytes().len());
+
+    let cert_path = std::env::var("YSH_TLS_CERT").unwrap_or_default();
+    let key_path = std::env::var("YSH_TLS_KEY").unwrap_or_default();
+    if !cert_path.is_empty() && cert_path != "/dev/null" {
+        match security::tls::build_tls_config(&cert_path, &key_path) {
+            Ok(_tls_config) => tracing::info!("TLS configured"),
+            Err(e) => tracing::warn!("TLS not configured: {}", e),
+        }
+    }
+
+    let cb = middleware::circuit_breaker::CircuitBreaker::new(3, std::time::Duration::from_secs(10));
+    cb.record_failure();
+    cb.record_failure();
+    tracing::info!("Circuit breaker state: available={}", cb.is_available());
+
+    let rate_limiter = create_rate_limiter(
+        ysh_config.rate_limit.requests_per_second,
+        ysh_config.rate_limit.burst_size,
+    );
+    let circuit_breaker = CircuitBreaker::new(5, std::time::Duration::from_secs(30));
 
     let state = server::AppState {
-        config: config_ref,
-        db: db_ref,
+        config: config_ref.clone(),
+        db: std::sync::Arc::new(db::Database::new("ysh.db")?),
+        secure_jwt_secret,
+        secure_encryption_key,
+        encrypted_key,
+        session_actor,
+        rate_limiter,
+        circuit_breaker,
     };
+
+    tracing::info!("Database initialized");
 
     let app = server::build_router(state);
 

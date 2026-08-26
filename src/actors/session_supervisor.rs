@@ -3,8 +3,8 @@ use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef};
 pub struct SessionSupervisor;
 
 pub struct SessionSupervisorState {
-    active_sessions: u32,
-    max_sessions: u32,
+    pub active_sessions: u32,
+    pub max_sessions: u32,
 }
 
 #[async_trait]
@@ -18,7 +18,10 @@ impl Actor for SessionSupervisor {
         _myself: ActorRef<Self::Msg>,
         max_sessions: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        tracing::info!("SessionSupervisor starting, max_sessions: {}", max_sessions);
+        tracing::info!(
+            "SessionSupervisor starting, max_sessions: {}",
+            max_sessions
+        );
         Ok(SessionSupervisorState {
             active_sessions: 0,
             max_sessions,
@@ -35,21 +38,27 @@ impl Actor for SessionSupervisor {
             SessionSupervisorMsg::SessionStarted { user_id } => {
                 state.active_sessions += 1;
                 tracing::info!(
-                    "Session started for user: {} (active: {})",
+                    "Session started for user: {} (active: {}/{})",
                     user_id,
-                    state.active_sessions
+                    state.active_sessions,
+                    state.max_sessions
                 );
             }
             SessionSupervisorMsg::SessionEnded { user_id } => {
                 state.active_sessions = state.active_sessions.saturating_sub(1);
                 tracing::info!(
-                    "Session ended for user: {} (active: {})",
+                    "Session ended for user: {} (active: {}/{})",
                     user_id,
-                    state.active_sessions
+                    state.active_sessions,
+                    state.max_sessions
                 );
             }
             SessionSupervisorMsg::GetActiveCount => {
-                tracing::debug!("Active sessions: {}", state.active_sessions);
+                tracing::debug!(
+                    "Active sessions: {}/{}",
+                    state.active_sessions,
+                    state.max_sessions
+                );
             }
         }
         Ok(())

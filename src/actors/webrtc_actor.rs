@@ -30,11 +30,16 @@ impl Actor for WebRTCActor {
         &self,
         _myself: ActorRef<Self::Msg>,
         msg: Self::Msg,
-        _state: &mut Self::State,
+        state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match msg {
             WebRTCActorMsg::CallStart { caller, callee } => {
-                tracing::info!("Call starting: {} -> {}", caller, callee);
+                tracing::info!(
+                    "Call starting: {} -> {} (max: {})",
+                    caller,
+                    callee,
+                    state.max_concurrent_calls
+                );
             }
             WebRTCActorMsg::CallEnd { caller, callee } => {
                 tracing::info!("Call ended: {} -> {}", caller, callee);

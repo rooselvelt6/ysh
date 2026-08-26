@@ -3,7 +3,7 @@ use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef};
 pub struct SupervisorTree;
 
 pub struct SupervisorTreeState {
-    config_path: String,
+    pub config_path: String,
 }
 
 #[async_trait]
@@ -25,14 +25,20 @@ impl Actor for SupervisorTree {
         &self,
         myself: ActorRef<Self::Msg>,
         msg: Self::Msg,
-        _state: &mut Self::State,
+        state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match msg {
             SupervisorTreeMsg::GetConfig => {
-                tracing::debug!("Config requested from supervisor tree");
+                tracing::debug!(
+                    "Config requested from supervisor tree (watching: {})",
+                    state.config_path
+                );
             }
             SupervisorTreeMsg::Shutdown => {
-                tracing::info!("SupervisorTree shutting down");
+                tracing::info!(
+                    "SupervisorTree shutting down (was watching: {})",
+                    state.config_path
+                );
                 myself.stop(None);
             }
         }
