@@ -4,7 +4,7 @@ use axum::{
     http::{Method, Request, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use std::sync::Arc;
@@ -106,6 +106,91 @@ pub fn build_router(state: AppState) -> Router {
         .route("/kyc/status", get(crate::auth::kyc::get_kyc_status))
         .route("/kyc/submit", post(crate::auth::kyc::submit_kyc));
 
+    let profile_routes = Router::new()
+        .route("/profile", get(crate::api::profile::get_my_profile))
+        .route("/profile", post(crate::api::profile::update_profile))
+        .route("/profile/{user_id}", get(crate::api::profile::get_profile))
+        .route("/users/search", get(crate::api::profile::search_users));
+
+    let agency_routes = Router::new()
+        .route("/agency", post(crate::api::agency::create_agency))
+        .route("/agencies", get(crate::api::agency::list_agencies))
+        .route("/agency/{agency_id}", get(crate::api::agency::get_agency))
+        .route(
+            "/agency/{agency_id}/members",
+            get(crate::api::agency::get_members),
+        )
+        .route(
+            "/agency/{agency_id}/members",
+            post(crate::api::agency::add_member),
+        );
+
+    let host_routes = Router::new()
+        .route("/host", post(crate::api::host::create_or_update_host))
+        .route("/host/{user_id}", get(crate::api::host::get_host))
+        .route(
+            "/host/availability",
+            post(crate::api::host::set_availability),
+        )
+        .route("/hosts", get(crate::api::host::list_hosts));
+
+    let wallet_routes = Router::new()
+        .route("/wallet/balance", get(crate::api::wallet::get_balance))
+        .route("/wallet/deposit", post(crate::api::wallet::deposit))
+        .route("/wallet/withdraw", post(crate::api::wallet::withdraw))
+        .route("/wallet/transfer", post(crate::api::wallet::transfer))
+        .route(
+            "/wallet/transactions",
+            get(crate::api::wallet::get_transactions),
+        );
+
+    let gift_routes = Router::new()
+        .route("/gifts/catalog", get(crate::api::gift::get_catalog))
+        .route(
+            "/gifts/send/{user_id}",
+            post(crate::api::gift::send_gift),
+        )
+        .route(
+            "/gifts/received",
+            get(crate::api::gift::get_received_gifts),
+        );
+
+    let moment_routes = Router::new()
+        .route("/moment", post(crate::api::moment::create_moment))
+        .route("/moments", get(crate::api::moment::get_feed))
+        .route(
+            "/moment/{moment_id}/like",
+            post(crate::api::moment::like_moment),
+        )
+        .route(
+            "/moment/{moment_id}/unlike",
+            post(crate::api::moment::unlike_moment),
+        )
+        .route(
+            "/moment/{moment_id}/comment",
+            post(crate::api::moment::comment),
+        )
+        .route(
+            "/moment/{moment_id}/comments",
+            get(crate::api::moment::get_comments),
+        )
+        .route(
+            "/moment/{moment_id}",
+            delete(crate::api::moment::delete_moment),
+        );
+
+    let admin_routes = Router::new()
+        .route("/admin/users", get(crate::api::admin::list_users))
+        .route(
+            "/admin/user/{user_id}/ban",
+            post(crate::api::admin::ban_user),
+        )
+        .route(
+            "/admin/user/{user_id}/unban",
+            post(crate::api::admin::unban_user),
+        )
+        .route("/admin/stats", get(crate::api::admin::platform_stats));
+
     let config_routes = Router::new().route("/config", get(get_config));
 
     let api_routes = Router::new()
@@ -115,7 +200,14 @@ pub fn build_router(state: AppState) -> Router {
         .merge(two_factor_routes)
         .merge(gdpr_routes)
         .merge(ccpa_routes)
-        .merge(kyc_routes);
+        .merge(kyc_routes)
+        .merge(profile_routes)
+        .merge(agency_routes)
+        .merge(host_routes)
+        .merge(wallet_routes)
+        .merge(gift_routes)
+        .merge(moment_routes)
+        .merge(admin_routes);
 
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::any())

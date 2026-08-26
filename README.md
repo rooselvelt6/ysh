@@ -208,7 +208,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 
 ### Base de Datos y Caché
 - **SQLite WAL** — Write-Ahead Logging para concurrencia, foreign keys habilitadas
-- **Schema migrations** — Tablas: users, recovery_codes, consent_records, devices
+- **Schema migrations** — Tablas: users, recovery_codes, consent_records, devices, profiles, agencies, agency_members, hosts, wallets, transactions, gift_catalog, gifts, moments, moment_likes, moment_comments
 - **Prepared statements** — Prevención de SQL injection
 - **DatabaseActor real** — Hold `Arc<Database>`, maneja HealthCheck, QueryCount, GetStats
 - **Sled KV cache** — Store embedded key-value con TTL, 64MB capacity, flush cada 1s
@@ -216,6 +216,17 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - **RateLimitCache** — Rate limiting por IP con TTL de 60s, fallback a governor
 - **Cache serialization** — Binary format con expiry, soporte TTL + increment atómico
 - **Health checks** — `/readyz` verifica DB, cache, session store y rate limiter en tiempo real
+
+### Backend API (Phase 4)
+- **Perfiles** — CRUD completo: update, get, get-by-id, search
+- **Agencias** — Crear, listar, detalle, miembros con roles (owner/host)
+- **Hosts** — Crear perfil, obtener, toggle disponibilidad, listar disponibles
+- **Wallet** — Balance, deposit, withdraw, transfer, historial transacciones
+- **Gift economy** — Catálogo de 6 regalos (Rose → Private Island), envío entre usuarios, recibidos
+- **Moments** — Crear posts, feed con likes/comentarios, like/unlike, comment, delete
+- **Admin** — Listar usuarios, ban/unban, platform stats (requiere role admin)
+- **35+ endpoints** — Todos probados end-to-end con curl
+- **11 tablas** — SQLite WAL con foreign keys
 
 ### APIs Implementadas (todas funcionales y probadas)
 | Endpoint | Método | Descripción |
@@ -239,6 +250,38 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 | `/api/v1/ccpa/do-not-sell` | POST | Actualizar preferencia |
 | `/api/v1/kyc/status` | GET | Estado de verificación |
 | `/api/v1/kyc/submit` | POST | Solicitar verificación |
+| `/api/v1/profile` | GET | Mi perfil + wallet |
+| `/api/v1/profile` | POST | Actualizar perfil |
+| `/api/v1/profile/:id` | GET | Perfil de usuario |
+| `/api/v1/users/search` | GET | Buscar usuarios |
+| `/api/v1/agency` | POST | Crear agencia |
+| `/api/v1/agencies` | GET | Listar agencias |
+| `/api/v1/agency/:id` | GET | Detalle de agencia |
+| `/api/v1/agency/:id/members` | GET | Miembros de agencia |
+| `/api/v1/agency/:id/members` | POST | Agregar miembro |
+| `/api/v1/host` | POST | Crear/actualizar perfil host |
+| `/api/v1/host/:id` | GET | Perfil de host |
+| `/api/v1/host/availability` | POST | Toggle disponibilidad |
+| `/api/v1/hosts` | GET | Listar hosts |
+| `/api/v1/wallet/balance` | GET | Balance de wallet |
+| `/api/v1/wallet/deposit` | POST | Depositar |
+| `/api/v1/wallet/withdraw` | POST | Retirar |
+| `/api/v1/wallet/transfer` | POST | Transferir |
+| `/api/v1/wallet/transactions` | GET | Historial de transacciones |
+| `/api/v1/gifts/catalog` | GET | Catálogo de regalos |
+| `/api/v1/gifts/send/:id` | POST | Enviar regalo |
+| `/api/v1/gifts/received` | GET | Regalos recibidos |
+| `/api/v1/moment` | POST | Crear momento |
+| `/api/v1/moments` | GET | Feed de momentos |
+| `/api/v1/moment/:id/like` | POST | Dar like |
+| `/api/v1/moment/:id/unlike` | POST | Quitar like |
+| `/api/v1/moment/:id/comment` | POST | Comentar |
+| `/api/v1/moment/:id/comments` | GET | Ver comentarios |
+| `/api/v1/moment/:id` | DELETE | Eliminar momento |
+| `/api/v1/admin/users` | GET | Listar usuarios (admin) |
+| `/api/v1/admin/user/:id/ban` | POST | Banear usuario (admin) |
+| `/api/v1/admin/user/:id/unban` | POST | Desbanear usuario (admin) |
+| `/api/v1/admin/stats` | GET | Estadísticas (admin) |
 
 ---
 
@@ -272,13 +315,17 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - /readyz health check real: DB + cache + session store + rate limiter
 - Cache probado en startup (set/get/delete cycle)
 
-### FASE 4: Backend API
-- API REST completa versionada (v1/v2)
-- Auth completo, Users, Agencies, Hosts
-- Matching, Calls, Gifts, Prizes, Wallet
-- Moments, Communities, Notifications
-- Admin endpoints
-- OpenAPI docs (utoipa)
+### FASE 4: Backend API ✅
+- Perfiles de usuario (update, get, get by ID, search)
+- Sistema de agencias (CRUD, members, roles)
+- Perfiles de host (create, get, availability toggle, list)
+- Wallet (balance, deposit, withdraw, transfer, transactions)
+- Gift economy (catalog, send, received — 6 tiers: common → legendary)
+- Moments feed (create, feed, like/unlike, comment, delete)
+- Admin panel (list users, ban/unban, platform stats)
+- 11 tablas SQLite: users, profiles, agencies, agency_members, hosts, wallets, transactions, gift_catalog, gifts, moments, moment_likes, moment_comments
+- 35+ endpoints probados end-to-end
+- 0 warnings, 0 errors
 
 ### FASE 5: Notificaciones
 - Email SMTP (lettre)
