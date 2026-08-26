@@ -164,26 +164,98 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 
 ---
 
-## Fases del Proyecto
+## Logros
+
+### Base del Sistema
+- **Config engine** — Lua 5.4 embebido (mlua) para configuración dinámica con hot-reload via ConfigActor
+- **8 actores OTP** — SupervisorTree, ConfigActor, ServerActor, DatabaseActor, CryptoActor, SessionSupervisor, WebRTCActor, AIActor
+- **Observabilidad** — tracing estructurado con timestamps y span por actor
+
+### Seguridad Criptográfica
+- **Cifrado simétrico** — AES-256-GCM y ChaCha20-Poly1305 con nonces aleatorios (OsRng)
+- **Intercambio de claves** — X25519 ECDH para acuerdos Diffie-Hellman
+- **Firmas digitales** — Ed25519 con verificación inline
+- **Hashing** — Blake3 para integridad de config y fingerprints
+- **SecureString** — Secretos con zeroize enDrop (memoria segura)
+- **SecureBuffer** — Buffers cifrados en memoria con zeroize
+- **EncryptedKey** — Claves envueltas con algoritmo asociado
+- **NonceGenerator** — Generador de nonces contadores con OsRng
+
+### Autenticación y Autorización
+- **Registro** — username + email + password, hash Argon2id, SQLite WAL
+- **Login** — credentials check + JWT access/refresh tokens
+- **JWT middleware** — AuthUser extractor, rechaza tokens `2fa_pending`
+- **Account lockout** — 5 intentos fallidos → bloqueo 15 minutos
+- **Rate limiting** — Sliding window por IP (governor)
+
+### 2FA / MFA
+- **TOTP setup** — Genera secreto HMAC-SHA1, URI otpauth://, 10 recovery codes
+- **TOTP verify** — Validación de código de 6 dígitos (ventana ±1 step)
+- **2FA pending flow** — Login sin 2FA → token temporal `2fa_pending` → verificación → token access real
+- **Recovery codes** — 10 códigos hasheados con SHA-256, uso único
+
+### Compliance
+- **GDPR export** — Dump completo de usuario, dispositivos, consentimientos
+- **GDPR delete** — Eliminación de cuenta y todos los datos asociados
+- **GDPR consent** — Registro de consentimiento con tipo, estado, timestamp
+- **CCPA do-not-sell** — Toggle get/set de preferencia "No Vender"
+- **KYC levels** — 4 niveles: unverified → email_verified → identity_verified → full_verified
+
+### Seguridad HTTP
+- **Security headers** — HSTS, CSP, X-Frame-Options: DENY, X-XSS-Protection, Referrer-Policy, Permissions-Policy, Cache-Control: no-store, X-Permitted-Cross-Domain-Policies
+- **CORS** — tower-http CorsLayer configurable
+- **Device fingerprinting** — Blake3 hash de user-agent + accept-language + accept-encoding
+
+### Base de Datos
+- **SQLite WAL** — Write-Ahead Logging para concurrencia
+- **Schema migrations** — Tablas: users, recovery_codes, consent_records, devices
+- **Prepared statements** — Prevención de SQL injection
+
+### APIs Implementadas (todas funcionales y probadas)
+| Endpoint | Método | Descripción |
+|---|---|---|
+| `/healthz` | GET | Health check |
+| `/api/v1/register` | POST | Registro de usuario |
+| `/api/v1/login` | POST | Login con lockout + 2FA |
+| `/api/v1/me` | GET | Perfil del usuario autenticado |
+| `/api/v1/encrypt` | POST | Cifrado AES-256-GCM / ChaCha20 |
+| `/api/v1/decrypt` | POST | Descifrado de datos |
+| `/api/v1/2fa/setup` | POST | Setup TOTP + recovery codes |
+| `/api/v1/2fa/verify` | POST | Verificación de código 2FA |
+| `/api/v1/2fa/disable` | POST | Desactivar 2FA |
+| `/api/v1/2fa/recovery` | GET | Obtener recovery codes |
+| `/api/v1/2fa/recovery-verify` | POST | Verificar recovery code |
+| `/api/v1/gdpr/export` | GET | Exportar todos los datos |
+| `/api/v1/gdpr/delete` | DELETE | Eliminar cuenta |
+| `/api/v1/gdpr/consent` | POST | Registrar consentimiento |
+| `/api/v1/gdpr/consent/history` | GET | Historial de consentimientos |
+| `/api/v1/ccpa/do-not-sell` | GET | Consultar preferencia |
+| `/api/v1/ccpa/do-not-sell` | POST | Actualizar preferencia |
+| `/api/v1/kyc/status` | GET | Estado de verificación |
+| `/api/v1/kyc/submit` | POST | Solicitar verificación |
+
+---
 
 ### FASE 1: Fundamentos ✅
 - Workspace, config Lua, actores OTP, seguridad completa
 - HTTP server con auth JWT
 - 0 warnings, 0 errores
 
-### FASE 2: Seguridad Enterprise
+### FASE 2: Seguridad Enterprise ✅
 - AES-256-GCM + ChaCha20-Poly1305 E2E
 - Argon2id password hashing
-- JWT con rotación automática
-- 2FA TOTP
-- Device fingerprinting
-- Rate limiting exhaustivo
-- Security headers (CSP, HSTS, X-Frame-Options)
-- CORS estricto
-- Account lockout after failed attempts
-- GDPR compliance (derecho al olvido, portabilidad de datos)
+- JWT con rotación automática + kind field (access/refresh/2fa_pending)
+- 2FA TOTP (HMAC-SHA1, recovery codes, setup/verify/disable)
+- Device fingerprinting (Blake3)
+- Rate limiting exhaustivo (sliding window)
+- Security headers (HSTS, CSP, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, Cache-Control)
+- CORS estricto (tower-http CorsLayer)
+- Account lockout (5 intentos fallidos → 15 min bloqueo)
+- GDPR compliance (derecho al olvido, portabilidad de datos, consent tracking)
 - CCPA compliance (Do Not Sell toggle)
-- KYC/AML para crypto
+- KYC/AML (4 niveles de verificación: unverified → email_verified → identity_verified → full_verified)
+- Security headers middleware completo
+- Todas las APIs probadas y funcionando end-to-end
 
 ### FASE 3: Base de Datos + Caché
 - SQLx con SQLite/PostgreSQL
@@ -273,25 +345,22 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 ## Comandos
 
 ```bash
-# Dev setup
-docker-compose up -d
-
-# Development
+# Build
 cargo build
-YSH_JWT_SECRET=secret YSH_DB_PASSWORD=pass YSH_ENCRYPTION_KEY=key \
+
+# Run (dev)
+YSH_JWT_SECRET=secret YSH_DB_PASSWORD=pass YSH_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef \
   YSH_TLS_CERT=/dev/null YSH_TLS_KEY=/dev/null cargo run
 
-# Testing
-cargo check
-cargo build
-cargo nextest run
-cargo audit
-cargo clippy --workspace
-cargo fmt --check
+# Quick test
+curl http://localhost:8080/healthz
+curl -X POST http://localhost:8080/api/v1/register \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"alice","email":"alice@test.com","password":"test123"}'
 
-# Production
-docker build -t ysh-platform .
-docker-compose -f docker-compose.prod.yml up -d
+# Verify
+cargo check          # 0 warnings, 0 errors
+cargo build          # Clean build
 ```
 
 ---
