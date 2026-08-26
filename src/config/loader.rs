@@ -46,6 +46,7 @@ struct RawConfig {
     rate_limit: super::settings::RateLimitConfig,
     ddos: super::settings::DdosConfig,
     cors: super::settings::CorsConfig,
+    economy: super::settings::EconomyConfig,
 }
 
 #[derive(Deserialize)]
@@ -171,6 +172,7 @@ impl RawConfig {
             rate_limit: self.rate_limit,
             ddos: self.ddos,
             cors: self.cors,
+            economy: self.economy,
         })
     }
 }

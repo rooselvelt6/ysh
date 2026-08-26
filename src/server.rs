@@ -168,6 +168,80 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/gifts/received",
             get(crate::api::gift::get_received_gifts),
+        )
+        .route(
+            "/gifts/sent",
+            get(crate::api::gift::get_sent_gifts),
+        )
+        .route(
+            "/gifts/stats",
+            get(crate::api::gift::get_gift_stats),
+        )
+        .route(
+            "/gifts/nft",
+            get(crate::api::gift::get_nft_gifts),
+        );
+
+    let staking_routes = Router::new()
+        .route("/staking/stake", post(crate::api::staking::stake))
+        .route("/staking/unstake", post(crate::api::staking::unstake))
+        .route("/staking/claim", post(crate::api::staking::claim_rewards))
+        .route("/staking/positions", get(crate::api::staking::get_positions))
+        .route("/staking/stats", get(crate::api::staking::get_stats));
+
+    let payout_routes = Router::new()
+        .route("/payout/request", post(crate::api::payout::request_payout))
+        .route("/payout/history", get(crate::api::payout::get_my_payouts))
+        .route(
+            "/admin/payouts/pending",
+            get(crate::api::payout::get_pending_payouts),
+        )
+        .route(
+            "/admin/payouts/process",
+            post(crate::api::payout::process_payout),
+        );
+
+    let receipt_routes = Router::new()
+        .route("/receipts", get(crate::api::receipt::get_my_receipts))
+        .route(
+            "/receipt/{receipt_id}",
+            get(crate::api::receipt::get_receipt),
+        )
+        .route(
+            "/receipt/{receipt_id}/verify",
+            get(crate::api::receipt::verify_receipt),
+        );
+
+    let commission_routes = Router::new()
+        .route(
+            "/commissions",
+            get(crate::api::commission::get_my_commissions),
+        )
+        .route(
+            "/referral/stats",
+            get(crate::api::commission::get_referral_stats),
+        )
+        .route(
+            "/referral/register",
+            post(crate::api::commission::register_referral),
+        );
+
+    let wallet_extra_routes = Router::new()
+        .route(
+            "/wallet/limits",
+            get(crate::api::wallet::get_spending_limits),
+        )
+        .route(
+            "/wallet/limits",
+            post(crate::api::wallet::set_spending_limit),
+        )
+        .route(
+            "/admin/wallet/{user_id}/freeze",
+            post(crate::api::wallet::freeze_wallet),
+        )
+        .route(
+            "/admin/wallet/{user_id}/unfreeze",
+            post(crate::api::wallet::unfreeze_wallet),
         );
 
     let moment_routes = Router::new()
@@ -288,7 +362,12 @@ pub fn build_router(state: AppState) -> Router {
         .merge(agency_routes)
         .merge(host_routes)
         .merge(wallet_routes)
+        .merge(wallet_extra_routes)
         .merge(gift_routes)
+        .merge(staking_routes)
+        .merge(payout_routes)
+        .merge(receipt_routes)
+        .merge(commission_routes)
         .merge(moment_routes)
         .merge(admin_routes)
         .merge(notification_routes)

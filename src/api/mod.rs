@@ -1,9 +1,13 @@
 pub mod admin;
 pub mod agency;
 pub mod chat;
+pub mod commission;
 pub mod gift;
 pub mod host;
 pub mod moment;
 pub mod notification;
+pub mod payout;
 pub mod profile;
+pub mod receipt;
+pub mod staking;
 pub mod wallet;

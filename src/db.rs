@@ -135,6 +135,7 @@ impl Database {
             CREATE TABLE IF NOT EXISTS wallets (
                 user_id INTEGER PRIMARY KEY,
                 balance INTEGER NOT NULL DEFAULT 0,
+                frozen INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -300,7 +301,144 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id, created_at);
             CREATE INDEX IF NOT EXISTS idx_moments_feed ON moments(user_id, created_at);
             CREATE INDEX IF NOT EXISTS idx_matching_queue ON matching_queue(status, mode);
-            CREATE INDEX IF NOT EXISTS idx_chat_participants ON chat_participants(user_id);",
+            CREATE INDEX IF NOT EXISTS idx_chat_participants ON chat_participants(user_id);
+
+            -- ═══════════════════════════════════════════
+            -- PHASE 9: ECONOMY + CRYPTO PAYMENTS
+            -- ═══════════════════════════════════════════
+
+            CREATE TABLE IF NOT EXISTS staking (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                amount INTEGER NOT NULL,
+                apy_rate REAL NOT NULL DEFAULT 0.05,
+                status TEXT NOT NULL DEFAULT 'active',
+                staked_at TEXT NOT NULL DEFAULT (datetime('now')),
+                unlocks_at TEXT NOT NULL,
+                rewards_earned INTEGER NOT NULL DEFAULT 0,
+                last_reward_calc TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS referrals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                referrer_id INTEGER NOT NULL,
+                referred_id INTEGER NOT NULL UNIQUE,
+                code TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                referred_at TEXT NOT NULL DEFAULT (datetime('now')),
+                first_purchase_at TEXT,
+                total_earned INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (referrer_id) REFERENCES users(id),
+                FOREIGN KEY (referred_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS call_billing (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                caller_id INTEGER NOT NULL,
+                host_id INTEGER NOT NULL,
+                call_type TEXT NOT NULL DEFAULT 'video',
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                duration_secs INTEGER NOT NULL DEFAULT 0,
+                cost_per_min INTEGER NOT NULL DEFAULT 0,
+                total_cost INTEGER NOT NULL DEFAULT 0,
+                host_earnings INTEGER NOT NULL DEFAULT 0,
+                platform_fee INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'active',
+                FOREIGN KEY (caller_id) REFERENCES users(id),
+                FOREIGN KEY (host_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS commissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                source_user_id INTEGER NOT NULL,
+                source_tx_id INTEGER,
+                tier INTEGER NOT NULL DEFAULT 1,
+                percentage REAL NOT NULL DEFAULT 0.10,
+                amount INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                paid_at TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (source_user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS payouts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                amount INTEGER NOT NULL,
+                currency TEXT NOT NULL DEFAULT 'USDT',
+                wallet_address TEXT NOT NULL,
+                network TEXT NOT NULL DEFAULT 'TRC20',
+                status TEXT NOT NULL DEFAULT 'pending',
+                tx_hash TEXT,
+                requested_at TEXT NOT NULL DEFAULT (datetime('now')),
+                processed_at TEXT,
+                admin_id INTEGER,
+                notes TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS fraud_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                alert_type TEXT NOT NULL,
+                severity TEXT NOT NULL DEFAULT 'medium',
+                description TEXT NOT NULL DEFAULT '',
+                evidence TEXT NOT NULL DEFAULT '{}',
+                status TEXT NOT NULL DEFAULT 'open',
+                ip_address TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                resolved_at TEXT,
+                resolved_by INTEGER
+            );
+
+            CREATE TABLE IF NOT EXISTS receipts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                receipt_type TEXT NOT NULL,
+                reference_id INTEGER NOT NULL,
+                amount INTEGER NOT NULL,
+                currency TEXT NOT NULL DEFAULT 'YSH',
+                description TEXT NOT NULL DEFAULT '',
+                metadata TEXT NOT NULL DEFAULT '{}',
+                receipt_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS spending_limits (
+                user_id INTEGER PRIMARY KEY,
+                daily_limit INTEGER NOT NULL DEFAULT 100000,
+                monthly_limit INTEGER NOT NULL DEFAULT 1000000,
+                daily_spent INTEGER NOT NULL DEFAULT 0,
+                monthly_spent INTEGER NOT NULL DEFAULT 0,
+                last_reset_date TEXT NOT NULL DEFAULT (date('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS nft_gifts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                gift_id INTEGER NOT NULL,
+                gift_record_id INTEGER NOT NULL,
+                token_id TEXT NOT NULL,
+                unlocked INTEGER NOT NULL DEFAULT 0,
+                minted_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (gift_id) REFERENCES gift_catalog(id),
+                FOREIGN KEY (gift_record_id) REFERENCES gifts(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_staking_user ON staking(user_id, status);
+            CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code);
+            CREATE INDEX IF NOT EXISTS idx_call_billing_host ON call_billing(host_id);
+            CREATE INDEX IF NOT EXISTS idx_commissions_user ON commissions(user_id, status);
+            CREATE INDEX IF NOT EXISTS idx_payouts_user ON payouts(user_id, status);
+            CREATE INDEX IF NOT EXISTS idx_fraud_alerts ON fraud_alerts(status, severity);
+            CREATE INDEX IF NOT EXISTS idx_receipts_user ON receipts(user_id, created_at);",
         )?;
         Ok(())
     }
@@ -1833,5 +1971,867 @@ impl Database {
             |row| row.get(0),
         )?;
         Ok(count)
+    }
+
+    // ═══════════════════════════════════════════
+    // PHASE 9: STAKING
+    // ═══════════════════════════════════════════
+
+    pub fn stake(&self, user_id: i64, amount: i64, apy_rate: f64, unlock_days: i64) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let balance: i64 = conn.query_row(
+            "SELECT COALESCE(balance, 0) FROM wallets WHERE user_id = ?1",
+            params![user_id], |r| r.get(0),
+        )?;
+        if balance < amount {
+            anyhow::bail!("Insufficient funds for staking: {} < {}", balance, amount);
+        }
+        conn.execute(
+            "UPDATE wallets SET balance = balance - ?1 WHERE user_id = ?2",
+            params![amount, user_id],
+        )?;
+        conn.execute(
+            "INSERT INTO staking (user_id, amount, apy_rate, unlocks_at)
+             VALUES (?1, ?2, ?3, datetime('now', '+' || ?4 || ' days'))",
+            params![user_id, amount, apy_rate, unlock_days],
+        )?;
+        let id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO transactions (user_id, tx_type, amount, description)
+             VALUES (?1, 'stake', ?2, ?3)",
+            params![user_id, amount, format!("Staked {} YSH for {} days", amount, unlock_days)],
+        )?;
+        Ok(id)
+    }
+
+    pub fn unstake(&self, user_id: i64, stake_id: i64) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let row: (i64, String, i64) = conn.query_row(
+            "SELECT amount, unlocks_at, rewards_earned FROM staking WHERE id = ?1 AND user_id = ?2 AND status = 'active'",
+            params![stake_id, user_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?;
+        let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+        if row.1 > now {
+            anyhow::bail!("Staking lock not yet expired, unlocks at: {}", row.1);
+        }
+        let total = row.0 + row.2;
+        conn.execute(
+            "UPDATE staking SET status = 'withdrawn', amount = 0, rewards_earned = 0 WHERE id = ?1",
+            params![stake_id],
+        )?;
+        conn.execute(
+            "UPDATE wallets SET balance = balance + ?1 WHERE user_id = ?2",
+            params![total, user_id],
+        )?;
+        conn.execute(
+            "INSERT INTO transactions (user_id, tx_type, amount, description)
+             VALUES (?1, 'unstake', ?2, ?3)",
+            params![user_id, total, format!("Unstaked + rewards from #{}", stake_id)],
+        )?;
+        Ok(total)
+    }
+
+    pub fn claim_staking_rewards(&self, user_id: i64, stake_id: i64) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let rewards: i64 = conn.query_row(
+            "SELECT rewards_earned FROM staking WHERE id = ?1 AND user_id = ?2 AND status = 'active'",
+            params![stake_id, user_id], |r| r.get(0),
+        )?;
+        if rewards <= 0 {
+            anyhow::bail!("No rewards to claim");
+        }
+        conn.execute(
+            "UPDATE staking SET rewards_earned = 0, last_reward_calc = datetime('now') WHERE id = ?1",
+            params![stake_id],
+        )?;
+        conn.execute(
+            "UPDATE wallets SET balance = balance + ?1 WHERE user_id = ?2",
+            params![rewards, user_id],
+        )?;
+        conn.execute(
+            "INSERT INTO transactions (user_id, tx_type, amount, description)
+             VALUES (?1, 'staking_reward', ?2, ?3)",
+            params![user_id, rewards, format!("Staking reward from #{}", stake_id)],
+        )?;
+        Ok(rewards)
+    }
+
+    pub fn get_staking_positions(&self, user_id: i64) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, amount, apy_rate, status, staked_at, unlocks_at, rewards_earned
+             FROM staking WHERE user_id = ?1 ORDER BY id DESC",
+        )?;
+        let rows = stmt.query_map(params![user_id], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "amount": row.get::<_, i64>(1)?,
+                "apy_rate": row.get::<_, f64>(2)?,
+                "status": row.get::<_, String>(3)?,
+                "staked_at": row.get::<_, String>(4)?,
+                "unlocks_at": row.get::<_, String>(5)?,
+                "rewards_earned": row.get::<_, i64>(6)?,
+            }))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    #[allow(dead_code)]
+    pub fn calculate_staking_rewards(&self) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, amount, apy_rate FROM staking WHERE status = 'active'",
+        )?;
+        let stakes: Vec<(i64, i64, f64)> = stmt.query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?.filter_map(|r| r.ok()).collect();
+
+        let mut updated = 0;
+        for (id, amount, apy) in stakes {
+            let daily_reward = ((amount as f64 * apy) / 365.0) as i64;
+            if daily_reward > 0 {
+                conn.execute(
+                    "UPDATE staking SET rewards_earned = rewards_earned + ?1,
+                     last_reward_calc = datetime('now') WHERE id = ?2",
+                    params![daily_reward, id],
+                )?;
+                updated += 1;
+            }
+        }
+        Ok(updated)
+    }
+
+    pub fn get_staking_stats(&self) -> Result<serde_json::Value> {
+        let conn = self.conn.lock().unwrap();
+        let total_staked: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(amount), 0) FROM staking WHERE status = 'active'",
+            [], |r| r.get(0),
+        )?;
+        let total_rewards: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(rewards_earned), 0) FROM staking WHERE status = 'active'",
+            [], |r| r.get(0),
+        )?;
+        let active_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM staking WHERE status = 'active'",
+            [], |r| r.get(0),
+        )?;
+        Ok(serde_json::json!({
+            "total_staked": total_staked,
+            "total_rewards_pending": total_rewards,
+            "active_positions": active_count,
+        }))
+    }
+
+    // ═══════════════════════════════════════════
+    // PHASE 9: REFERRALS
+    // ═══════════════════════════════════════════
+
+    pub fn create_referral(&self, referrer_id: i64, referred_id: i64, code: &str) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO referrals (referrer_id, referred_id, code) VALUES (?1, ?2, ?3)",
+            params![referrer_id, referred_id, code],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn find_referral_by_code(&self, code: &str) -> Result<Option<(i64, i64)>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT referrer_id, referred_id FROM referrals WHERE code = ?1",
+            params![code],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        );
+        match result {
+            Ok(v) => Ok(Some(v)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn complete_referral(&self, referred_id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE referrals SET status = 'completed', first_purchase_at = datetime('now')
+             WHERE referred_id = ?1 AND status = 'pending'",
+            params![referred_id],
+        )?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn add_referral_earning(&self, referrer_id: i64, amount: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE referrals SET total_earned = total_earned + ?1 WHERE referrer_id = ?2",
+            params![amount, referrer_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_referral_stats(&self, user_id: i64) -> Result<serde_json::Value> {
+        let conn = self.conn.lock().unwrap();
+        let total_referred: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM referrals WHERE referrer_id = ?1",
+            params![user_id], |r| r.get(0),
+        )?;
+        let completed: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM referrals WHERE referrer_id = ?1 AND status = 'completed'",
+            params![user_id], |r| r.get(0),
+        )?;
+        let total_earned: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(total_earned), 0) FROM referrals WHERE referrer_id = ?1",
+            params![user_id], |r| r.get(0),
+        )?;
+        let code: Option<String> = conn.query_row(
+            "SELECT code FROM referrals WHERE referrer_id = ?1 LIMIT 1",
+            params![user_id], |r| r.get(0),
+        ).ok();
+        Ok(serde_json::json!({
+            "referral_code": code,
+            "total_referred": total_referred,
+            "completed": completed,
+            "total_earned": total_earned,
+        }))
+    }
+
+    // ═══════════════════════════════════════════
+    // PHASE 9: CALL BILLING
+    // ═══════════════════════════════════════════
+
+    #[allow(dead_code)]
+    pub fn start_call_billing(
+        &self, caller_id: i64, host_id: i64, call_type: &str, cost_per_min: i64,
+    ) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO call_billing (caller_id, host_id, call_type, cost_per_min, started_at)
+             VALUES (?1, ?2, ?3, ?4, datetime('now'))",
+            params![caller_id, host_id, call_type, cost_per_min],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    #[allow(dead_code)]
+    pub fn end_call_billing(&self, call_id: i64) -> Result<(i64, i64, i64)> {
+        let conn = self.conn.lock().unwrap();
+        let (cost_per_min, started_at): (i64, String) = conn.query_row(
+            "SELECT cost_per_min, started_at FROM call_billing WHERE id = ?1 AND status = 'active'",
+            params![call_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        let now_str = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+        let start = chrono::NaiveDateTime::parse_from_str(&started_at, "%Y-%m-%dT%H:%M:%SZ")
+            .unwrap_or(chrono::NaiveDateTime::default());
+        let end = chrono::NaiveDateTime::parse_from_str(&now_str, "%Y-%m-%dT%H:%M:%SZ")
+            .unwrap_or(chrono::NaiveDateTime::default());
+        let duration_secs = (end - start).num_seconds().max(0) as i64;
+        let duration_mins = ((duration_secs + 59) / 60).max(1);
+        let total_cost = duration_mins * cost_per_min;
+        let host_earnings = (total_cost as f64 * 0.70) as i64;
+        let platform_fee = total_cost - host_earnings;
+
+        conn.execute(
+            "UPDATE call_billing SET ended_at = ?1, duration_secs = ?2,
+             total_cost = ?3, host_earnings = ?4, platform_fee = ?5, status = 'completed'
+             WHERE id = ?6",
+            params![now_str, duration_secs, total_cost, host_earnings, platform_fee, call_id],
+        )?;
+        Ok((total_cost, host_earnings, platform_fee))
+    }
+
+    #[allow(dead_code)]
+    pub fn get_host_call_stats(&self, host_id: i64) -> Result<serde_json::Value> {
+        let conn = self.conn.lock().unwrap();
+        let total_calls: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM call_billing WHERE host_id = ?1 AND status = 'completed'",
+            params![host_id], |r| r.get(0),
+        )?;
+        let total_earnings: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(host_earnings), 0) FROM call_billing WHERE host_id = ?1 AND status = 'completed'",
+            params![host_id], |r| r.get(0),
+        )?;
+        let total_duration: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(duration_secs), 0) FROM call_billing WHERE host_id = ?1 AND status = 'completed'",
+            params![host_id], |r| r.get(0),
+        )?;
+        Ok(serde_json::json!({
+            "total_calls": total_calls,
+            "total_earnings": total_earnings,
+            "total_duration_secs": total_duration,
+        }))
+    }
+
+    // ═══════════════════════════════════════════
+    // PHASE 9: COMMISSIONS (Multi-level)
+    // ═══════════════════════════════════════════
+
+    #[allow(dead_code)]
+    pub fn create_commission(
+        &self, user_id: i64, source_user_id: i64, source_tx_id: Option<i64>,
+        tier: i32, percentage: f64, amount: i64,
+    ) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO commissions (user_id, source_user_id, source_tx_id, tier, percentage, amount)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![user_id, source_user_id, source_tx_id, tier, percentage, amount],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn get_user_commissions(&self, user_id: i64, status: Option<&str>) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, source_user_id, tier, percentage, amount, status, created_at
+             FROM commissions WHERE user_id = ?1 AND (?2 IS NULL OR status = ?2) ORDER BY id DESC",
+        )?;
+        let rows = stmt.query_map(params![user_id, status], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "source_user_id": row.get::<_, i64>(1)?,
+                "tier": row.get::<_, i32>(2)?,
+                "percentage": row.get::<_, f64>(3)?,
+                "amount": row.get::<_, i64>(4)?,
+                "status": row.get::<_, String>(5)?,
+                "created_at": row.get::<_, String>(6)?,
+            }))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn get_commission_summary(&self, user_id: i64) -> Result<serde_json::Value> {
+        let conn = self.conn.lock().unwrap();
+        let total_earned: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(amount), 0) FROM commissions WHERE user_id = ?1",
+            params![user_id], |r| r.get(0),
+        )?;
+        let pending: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(amount), 0) FROM commissions WHERE user_id = ?1 AND status = 'pending'",
+            params![user_id], |r| r.get(0),
+        )?;
+        let paid: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(amount), 0) FROM commissions WHERE user_id = ?1 AND status = 'paid'",
+            params![user_id], |r| r.get(0),
+        )?;
+        let referrals_count: i64 = conn.query_row(
+            "SELECT COUNT(DISTINCT source_user_id) FROM commissions WHERE user_id = ?1",
+            params![user_id], |r| r.get(0),
+        )?;
+        Ok(serde_json::json!({
+            "total_earned": total_earned,
+            "pending": pending,
+            "paid": paid,
+            "referrals_count": referrals_count,
+        }))
+    }
+
+    #[allow(dead_code)]
+    pub fn distribute_commissions(
+        &self, source_user_id: i64, source_tx_id: Option<i64>, total_amount: i64,
+        tier1_user_id: Option<i64>, tier2_user_id: Option<i64>,
+        tier3_user_id: Option<i64>, tier4_user_id: Option<i64>,
+    ) -> Result<()> {
+        let tiers: Vec<(Option<i64>, f64)> = vec![
+            (tier1_user_id, 0.40),
+            (tier2_user_id, 0.20),
+            (tier3_user_id, 0.10),
+            (tier4_user_id, 0.05),
+        ];
+        for (i, (uid, pct)) in tiers.into_iter().enumerate() {
+            if let Some(uid) = uid {
+                if uid == source_user_id { continue; }
+                let amount = (total_amount as f64 * pct) as i64;
+                if amount > 0 {
+                    self.create_commission(uid, source_user_id, source_tx_id, (i + 1) as i32, pct, amount)?;
+                    self.deposit(uid, amount, &format!("Commission tier {} from user #{}", i + 1, source_user_id))?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn pay_pending_commissions(&self, user_id: i64) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let total: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(amount), 0) FROM commissions WHERE user_id = ?1 AND status = 'pending'",
+            params![user_id], |r| r.get(0),
+        )?;
+        if total > 0 {
+            conn.execute(
+                "UPDATE commissions SET status = 'paid', paid_at = datetime('now')
+                 WHERE user_id = ?1 AND status = 'pending'",
+                params![user_id],
+            )?;
+        }
+        Ok(total)
+    }
+
+    // ═══════════════════════════════════════════
+    // PHASE 9: PAYOUTS
+    // ═══════════════════════════════════════════
+
+    pub fn request_payout(
+        &self, user_id: i64, amount: i64, currency: &str,
+        wallet_address: &str, network: &str,
+    ) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let balance: i64 = conn.query_row(
+            "SELECT COALESCE(balance, 0) FROM wallets WHERE user_id = ?1",
+            params![user_id], |r| r.get(0),
+        )?;
+        if balance < amount {
+            anyhow::bail!("Insufficient balance for payout: {} < {}", balance, amount);
+        }
+        if amount < 10 {
+            anyhow::bail!("Minimum payout is 10 YSH");
+        }
+        conn.execute(
+            "UPDATE wallets SET balance = balance - ?1 WHERE user_id = ?2",
+            params![amount, user_id],
+        )?;
+        conn.execute(
+            "INSERT INTO payouts (user_id, amount, currency, wallet_address, network)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![user_id, amount, currency, wallet_address, network],
+        )?;
+        let id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO transactions (user_id, tx_type, amount, description)
+             VALUES (?1, 'payout_request', ?2, ?3)",
+            params![user_id, amount, format!("Payout {} {} to {}", amount, currency, wallet_address)],
+        )?;
+        Ok(id)
+    }
+
+    pub fn get_user_payouts(&self, user_id: i64) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, amount, currency, wallet_address, network, status,
+                    tx_hash, requested_at, processed_at
+             FROM payouts WHERE user_id = ?1 ORDER BY id DESC",
+        )?;
+        let rows = stmt.query_map(params![user_id], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "amount": row.get::<_, i64>(1)?,
+                "currency": row.get::<_, String>(2)?,
+                "wallet_address": row.get::<_, String>(3)?,
+                "network": row.get::<_, String>(4)?,
+                "status": row.get::<_, String>(5)?,
+                "tx_hash": row.get::<_, Option<String>>(6)?,
+                "requested_at": row.get::<_, String>(7)?,
+                "processed_at": row.get::<_, Option<String>>(8)?,
+            }))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn process_payout(&self, payout_id: i64, admin_id: i64, tx_hash: &str, approved: bool) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let status = if approved { "completed" } else { "rejected" };
+        let note = if approved { "Approved" } else { "Rejected" };
+        conn.execute(
+            "UPDATE payouts SET status = ?1, tx_hash = ?2, processed_at = datetime('now'),
+             admin_id = ?3, notes = ?4 WHERE id = ?5",
+            params![status, tx_hash, admin_id, note, payout_id],
+        )?;
+        if !approved {
+            let (user_id, amount): (i64, i64) = conn.query_row(
+                "SELECT user_id, amount FROM payouts WHERE id = ?1",
+                params![payout_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?;
+            conn.execute(
+                "UPDATE wallets SET balance = balance + ?1 WHERE user_id = ?2",
+                params![amount, user_id],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn get_pending_payouts(&self) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT p.id, p.user_id, u.username, p.amount, p.currency,
+                    p.wallet_address, p.network, p.requested_at
+             FROM payouts p JOIN users u ON u.id = p.user_id
+             WHERE p.status = 'pending' ORDER BY p.requested_at ASC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "user_id": row.get::<_, i64>(1)?,
+                "username": row.get::<_, String>(2)?,
+                "amount": row.get::<_, i64>(3)?,
+                "currency": row.get::<_, String>(4)?,
+                "wallet_address": row.get::<_, String>(5)?,
+                "network": row.get::<_, String>(6)?,
+                "requested_at": row.get::<_, String>(7)?,
+            }))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    // ═══════════════════════════════════════════
+    // PHASE 9: FRAUD DETECTION
+    // ═══════════════════════════════════════════
+
+    pub fn create_fraud_alert(
+        &self, user_id: Option<i64>, alert_type: &str, severity: &str,
+        description: &str, evidence: &str, ip_address: Option<&str>,
+    ) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO fraud_alerts (user_id, alert_type, severity, description, evidence, ip_address)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![user_id, alert_type, severity, description, evidence, ip_address],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    #[allow(dead_code)]
+    pub fn get_fraud_alerts(&self, status: Option<&str>) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, user_id, alert_type, severity, description, status, created_at
+             FROM fraud_alerts WHERE (?1 IS NULL OR status = ?1) ORDER BY id DESC",
+        )?;
+        let rows = stmt.query_map(params![status], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "user_id": row.get::<_, Option<i64>>(1)?,
+                "alert_type": row.get::<_, String>(2)?,
+                "severity": row.get::<_, String>(3)?,
+                "description": row.get::<_, String>(4)?,
+                "status": row.get::<_, String>(5)?,
+                "created_at": row.get::<_, String>(6)?,
+            }))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    #[allow(dead_code)]
+    pub fn resolve_fraud_alert(&self, alert_id: i64, resolver_id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE fraud_alerts SET status = 'resolved', resolved_at = datetime('now'),
+             resolved_by = ?1 WHERE id = ?2",
+            params![resolver_id, alert_id],
+        )?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn check_velocity(&self, user_id: i64, tx_type: &str, window_secs: i64) -> Result<(i64, i64)> {
+        let conn = self.conn.lock().unwrap();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM transactions
+             WHERE user_id = ?1 AND tx_type = ?2
+             AND created_at > datetime('now', '-' || ?3 || ' seconds')",
+            params![user_id, tx_type, window_secs],
+            |r| r.get(0),
+        )?;
+        let total_amount: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(ABS(amount)), 0) FROM transactions
+             WHERE user_id = ?1 AND tx_type = ?2
+             AND created_at > datetime('now', '-' || ?3 || ' seconds')",
+            params![user_id, tx_type, window_secs],
+            |r| r.get(0),
+        )?;
+        Ok((count, total_amount))
+    }
+
+    // ═══════════════════════════════════════════
+    // PHASE 9: RECEIPTS
+    // ═══════════════════════════════════════════
+
+    pub fn create_receipt(
+        &self, user_id: i64, receipt_type: &str, reference_id: i64,
+        amount: i64, currency: &str, description: &str, metadata: &str,
+    ) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let receipt_content = format!("{}|{}|{}|{}|{}|{}", user_id, receipt_type, reference_id, amount, currency, description);
+        let receipt_hash = blake3::hash(receipt_content.as_bytes()).to_hex().to_string();
+        conn.execute(
+            "INSERT INTO receipts (user_id, receipt_type, reference_id, amount, currency, description, metadata, receipt_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![user_id, receipt_type, reference_id, amount, currency, description, metadata, receipt_hash],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn get_receipt(&self, receipt_id: i64) -> Result<Option<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, user_id, receipt_type, reference_id, amount, currency,
+                    description, metadata, receipt_hash, created_at
+             FROM receipts WHERE id = ?1",
+        )?;
+        let mut rows = stmt.query_map(params![receipt_id], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "user_id": row.get::<_, i64>(1)?,
+                "receipt_type": row.get::<_, String>(2)?,
+                "reference_id": row.get::<_, i64>(3)?,
+                "amount": row.get::<_, i64>(4)?,
+                "currency": row.get::<_, String>(5)?,
+                "description": row.get::<_, String>(6)?,
+                "metadata": row.get::<_, String>(7)?,
+                "receipt_hash": row.get::<_, String>(8)?,
+                "created_at": row.get::<_, String>(9)?,
+            }))
+        })?;
+        match rows.next() {
+            Some(r) => Ok(Some(r?)),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_user_receipts(&self, user_id: i64, limit: i64) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, receipt_type, reference_id, amount, currency, description, receipt_hash, created_at
+             FROM receipts WHERE user_id = ?1 ORDER BY id DESC LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![user_id, limit], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "type": row.get::<_, String>(1)?,
+                "reference_id": row.get::<_, i64>(2)?,
+                "amount": row.get::<_, i64>(3)?,
+                "currency": row.get::<_, String>(4)?,
+                "description": row.get::<_, String>(5)?,
+                "receipt_hash": row.get::<_, String>(6)?,
+                "created_at": row.get::<_, String>(7)?,
+            }))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn verify_receipt(&self, receipt_id: i64) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let (user_id, receipt_type, reference_id, amount, currency, description, stored_hash): (
+            i64, String, i64, i64, String, String, String,
+        ) = conn.query_row(
+            "SELECT user_id, receipt_type, reference_id, amount, currency, description, receipt_hash
+             FROM receipts WHERE id = ?1",
+            params![receipt_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
+        )?;
+        let content = format!("{}|{}|{}|{}|{}|{}", user_id, receipt_type, reference_id, amount, currency, description);
+        let computed = blake3::hash(content.as_bytes()).to_hex().to_string();
+        Ok(computed == stored_hash)
+    }
+
+    // ═══════════════════════════════════════════
+    // PHASE 9: ENHANCED WALLET
+    // ═══════════════════════════════════════════
+
+    pub fn freeze_wallet(&self, user_id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE wallets SET frozen = 1 WHERE user_id = ?1",
+            params![user_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn unfreeze_wallet(&self, user_id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE wallets SET frozen = 0 WHERE user_id = ?1",
+            params![user_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn is_wallet_frozen(&self, user_id: i64) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let frozen: i32 = conn.query_row(
+            "SELECT COALESCE(frozen, 0) FROM wallets WHERE user_id = ?1",
+            params![user_id], |r| r.get(0),
+        ).unwrap_or(0);
+        Ok(frozen != 0)
+    }
+
+    pub fn check_spending_limit(&self, user_id: i64, amount: i64) -> Result<(bool, String)> {
+        let conn = self.conn.lock().unwrap();
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let month = chrono::Utc::now().format("%Y-%m").to_string();
+
+        conn.execute(
+            "INSERT OR IGNORE INTO spending_limits (user_id, last_reset_date) VALUES (?1, ?2)",
+            params![user_id, today],
+        )?;
+
+        let (daily_limit, monthly_limit, daily_spent, monthly_spent, last_reset): (i64, i64, i64, i64, String) = conn.query_row(
+            "SELECT daily_limit, monthly_limit, daily_spent, monthly_spent, last_reset_date
+             FROM spending_limits WHERE user_id = ?1",
+            params![user_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+        )?;
+
+        if last_reset != today {
+            conn.execute(
+                "UPDATE spending_limits SET daily_spent = 0, last_reset_date = ?1 WHERE user_id = ?2",
+                params![today, user_id],
+            )?;
+        }
+        let month_prefix = &month;
+        if !last_reset.starts_with(month_prefix) {
+            conn.execute(
+                "UPDATE spending_limits SET monthly_spent = 0 WHERE user_id = ?1",
+                params![user_id],
+            )?;
+        }
+
+        let daily_spent = if last_reset != today { 0 } else { daily_spent };
+        if daily_spent + amount > daily_limit {
+            return Ok((false, format!("Daily limit exceeded: {} + {} > {}", daily_spent, amount, daily_limit)));
+        }
+        if monthly_spent + amount > monthly_limit {
+            return Ok((false, format!("Monthly limit exceeded: {} + {} > {}", monthly_spent, amount, monthly_limit)));
+        }
+
+        conn.execute(
+            "UPDATE spending_limits SET daily_spent = daily_spent + ?1, monthly_spent = monthly_spent + ?1
+             WHERE user_id = ?2",
+            params![amount, user_id],
+        )?;
+        Ok((true, "OK".into()))
+    }
+
+    pub fn set_spending_limit(&self, user_id: i64, daily: i64, monthly: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO spending_limits (user_id, daily_limit, monthly_limit)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(user_id) DO UPDATE SET daily_limit = ?2, monthly_limit = ?3",
+            params![user_id, daily, monthly],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_spending_limits(&self, user_id: i64) -> Result<serde_json::Value> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT daily_limit, monthly_limit, daily_spent, monthly_spent
+             FROM spending_limits WHERE user_id = ?1",
+            params![user_id],
+            |row| {
+                Ok(serde_json::json!({
+                    "daily_limit": row.get::<_, i64>(0)?,
+                    "monthly_limit": row.get::<_, i64>(1)?,
+                    "daily_spent": row.get::<_, i64>(2)?,
+                    "monthly_spent": row.get::<_, i64>(3)?,
+                }))
+            },
+        );
+        match result {
+            Ok(v) => Ok(v),
+            Err(_) => Ok(serde_json::json!({
+                "daily_limit": 100000,
+                "monthly_limit": 1000000,
+                "daily_spent": 0,
+                "monthly_spent": 0,
+            })),
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // PHASE 9: ENHANCED GIFTS
+    // ═══════════════════════════════════════════
+
+    pub fn get_sent_gifts(&self, user_id: i64) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT g.id, g.price, gc.name, gc.rarity, u.username as to_user, g.created_at
+             FROM gifts g
+             JOIN gift_catalog gc ON gc.id = g.gift_id
+             JOIN users u ON u.id = g.to_user_id
+             WHERE g.from_user_id = ?1 ORDER BY g.id DESC",
+        )?;
+        let rows = stmt.query_map(params![user_id], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "price": row.get::<_, i64>(1)?,
+                "name": row.get::<_, String>(2)?,
+                "rarity": row.get::<_, String>(3)?,
+                "to_user": row.get::<_, String>(4)?,
+                "created_at": row.get::<_, String>(5)?,
+            }))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn get_gift_stats(&self, user_id: i64) -> Result<serde_json::Value> {
+        let conn = self.conn.lock().unwrap();
+        let sent_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM gifts WHERE from_user_id = ?1",
+            params![user_id], |r| r.get(0),
+        )?;
+        let received_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM gifts WHERE to_user_id = ?1",
+            params![user_id], |r| r.get(0),
+        )?;
+        let total_spent: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(price), 0) FROM gifts WHERE from_user_id = ?1",
+            params![user_id], |r| r.get(0),
+        )?;
+        let total_received: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(price), 0) FROM gifts WHERE to_user_id = ?1",
+            params![user_id], |r| r.get(0),
+        )?;
+        let rarest: Option<String> = conn.query_row(
+            "SELECT gc.rarity FROM gifts g
+             JOIN gift_catalog gc ON gc.id = g.gift_id
+             WHERE g.to_user_id = ?1
+             ORDER BY CASE gc.rarity WHEN 'legendary' THEN 1 WHEN 'epic' THEN 2 WHEN 'rare' THEN 3 ELSE 4 END
+             LIMIT 1",
+            params![user_id], |r| r.get(0),
+        ).ok();
+        Ok(serde_json::json!({
+            "sent_count": sent_count,
+            "received_count": received_count,
+            "total_spent": total_spent,
+            "total_received": total_received,
+            "rarest_gift_rarity": rarest,
+        }))
+    }
+
+    pub fn mint_nft_gift(&self, user_id: i64, gift_id: i64, gift_record_id: i64) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let token_id = format!("YSH-NFT-{}-{}", gift_record_id, chrono::Utc::now().timestamp());
+        conn.execute(
+            "INSERT INTO nft_gifts (user_id, gift_id, gift_record_id, token_id)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![user_id, gift_id, gift_record_id, token_id],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn get_nft_gifts(&self, user_id: i64) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT n.id, n.token_id, gc.name, gc.rarity, n.unlocked, n.minted_at
+             FROM nft_gifts n
+             JOIN gift_catalog gc ON gc.id = n.gift_id
+             WHERE n.user_id = ?1 ORDER BY n.id DESC",
+        )?;
+        let rows = stmt.query_map(params![user_id], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "token_id": row.get::<_, String>(1)?,
+                "name": row.get::<_, String>(2)?,
+                "rarity": row.get::<_, String>(3)?,
+                "unlocked": row.get::<_, i32>(4)? != 0,
+                "minted_at": row.get::<_, String>(5)?,
+            }))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
     }
 }

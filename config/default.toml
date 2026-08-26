@@ -98,3 +98,40 @@ message_rate_per_second = 10
 allowed_origins = ["*"]           # restrict in production
 allowed_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 max_age_secs = 3600
+
+# ═══════════════════════════════════════════
+# ECONOMY + STAKING
+# ═══════════════════════════════════════════
+[economy]
+min_payout = 10
+max_daily_spending = 100000
+max_monthly_spending = 1000000
+commission_tiers = 4
+platform_fee_pct = 0.30
+
+[economy.staking]
+min_stake = 100
+max_stake = 10000000
+default_apy = 0.05
+min_lock_days = 1
+max_lock_days = 365
+reward_calc_interval_hours = 24
+
+[economy.commission]
+tier1_pct = 0.40
+tier2_pct = 0.20
+tier3_pct = 0.10
+tier4_pct = 0.05
+min_purchase_for_commission = 100
+
+[economy.fraud]
+velocity_window_secs = 300
+max_tx_per_window = 20
+max_amount_per_window = 500000
+large_tx_threshold = 10000
+auto_freeze_on_fraud = true
+
+[economy.call_billing]
+min_cost_per_min = 1
+default_cost_per_min = 5
+host_earnings_pct = 0.70

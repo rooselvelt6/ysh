@@ -15,6 +15,7 @@ pub struct YshConfig {
     pub rate_limit: RateLimitConfig,
     pub ddos: DdosConfig,
     pub cors: CorsConfig,
+    pub economy: EconomyConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,4 +159,69 @@ pub struct CorsConfig {
     pub allowed_origins: Vec<String>,
     pub allowed_methods: Vec<String>,
     pub max_age_secs: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EconomyConfig {
+    pub min_payout: i64,
+    pub max_daily_spending: i64,
+    pub max_monthly_spending: i64,
+    pub commission_tiers: i32,
+    pub platform_fee_pct: f64,
+    #[serde(default = "default_staking")]
+    pub staking: StakingConfig,
+    #[serde(default = "default_commission")]
+    pub commission: CommissionConfig,
+    #[serde(default = "default_fraud")]
+    pub fraud: FraudConfig,
+    #[serde(default = "default_call_billing")]
+    pub call_billing: CallBillingConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StakingConfig {
+    pub min_stake: i64,
+    pub max_stake: i64,
+    pub default_apy: f64,
+    pub min_lock_days: i64,
+    pub max_lock_days: i64,
+    pub reward_calc_interval_hours: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommissionConfig {
+    pub tier1_pct: f64,
+    pub tier2_pct: f64,
+    pub tier3_pct: f64,
+    pub tier4_pct: f64,
+    pub min_purchase_for_commission: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FraudConfig {
+    pub velocity_window_secs: i64,
+    pub max_tx_per_window: i64,
+    pub max_amount_per_window: i64,
+    pub large_tx_threshold: i64,
+    pub auto_freeze_on_fraud: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallBillingConfig {
+    pub min_cost_per_min: i64,
+    pub default_cost_per_min: i64,
+    pub host_earnings_pct: f64,
+}
+
+fn default_staking() -> StakingConfig {
+    StakingConfig { min_stake: 100, max_stake: 10000000, default_apy: 0.05, min_lock_days: 1, max_lock_days: 365, reward_calc_interval_hours: 24 }
+}
+fn default_commission() -> CommissionConfig {
+    CommissionConfig { tier1_pct: 0.40, tier2_pct: 0.20, tier3_pct: 0.10, tier4_pct: 0.05, min_purchase_for_commission: 100 }
+}
+fn default_fraud() -> FraudConfig {
+    FraudConfig { velocity_window_secs: 300, max_tx_per_window: 20, max_amount_per_window: 500000, large_tx_threshold: 10000, auto_freeze_on_fraud: true }
+}
+fn default_call_billing() -> CallBillingConfig {
+    CallBillingConfig { min_cost_per_min: 1, default_cost_per_min: 5, host_earnings_pct: 0.70 }
 }
