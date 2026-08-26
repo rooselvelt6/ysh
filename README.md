@@ -13,13 +13,13 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 | **Backend** | Axum | 0.8.9 | REST + WebSocket |
 | **Frontend** | Leptos | 0.8.19 | WASM |
 | **Base de Datos** | rusqlite | 0.40 | SQLite dev, Postgres prod |
-| **Config** | mlua | 0.10 | Lua 5.4 embebido |
+| **Config** | toml | 0.8 | TOML nativo + env vars |
 | **Actores** | ractor | 0.16 | OTP supervision tree |
 | **Encriptación** | AES-256-GCM / ChaCha20-Poly1305 | 0.10 / 0.11 | E2E messages |
 | **Passwords** | Argon2id + Blake3 | 0.5 / 1.x | Hashing seguro |
 | **JWT** | jsonwebtoken | 9.x | Tokens |
 | **TLS** | rustls | 0.23 | TLS 1.3 |
-| **Rate Limiting** | governor | 0.8 | Sliding window |
+| **Rate Limiting** | governor + dashmap | 0.8 / 6.x | Per-IP keyed, auto-block |
 | **WebRTC/SFU** | LiveKit | 1.x | SFU managed |
 | **IA/ML** | Burn | 0.21.0 | Neural nets, fuzzy, genetic |
 | **Pagos Cripto** | Binance API | - | BTC/ETH/USDT/BNB |
@@ -167,7 +167,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 ## Logros
 
 ### Base del Sistema
-- **Config engine** — Lua 5.4 embebido (mlua) para configuración dinámica con hot-reload via ConfigActor
+- **Config engine** — TOML nativo (toml crate) con env vars dinámicas, hot-reload via ConfigActor, sin dependencia de Lua
 - **8 actores OTP** — SupervisorTree, ConfigActor, ServerActor, DatabaseActor, CryptoActor, SessionSupervisor, WebRTCActor, AIActor
 - **Observabilidad** — tracing estructurado con timestamps y span por actor
 
@@ -186,7 +186,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - **Login** — credentials check + JWT access/refresh tokens
 - **JWT middleware** — AuthUser extractor, rechaza tokens `2fa_pending`
 - **Account lockout** — 5 intentos fallidos → bloqueo 15 minutos
-- **Rate limiting** — Sliding window por IP (governor)
+- **Rate limiting** — Per-IP keyed con clasificación por ruta (governor + DashMap)
 
 ### 2FA / MFA
 - **TOTP setup** — Genera secreto HMAC-SHA1, URI otpauth://, 10 recovery codes
@@ -203,8 +203,18 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 
 ### Seguridad HTTP
 - **Security headers** — HSTS, CSP, X-Frame-Options: DENY, X-XSS-Protection, Referrer-Policy, Permissions-Policy, Cache-Control: no-store, X-Permitted-Cross-Domain-Policies
-- **CORS** — tower-http CorsLayer configurable
+- **CORS** — Configurable desde TOML (allowed_origins, methods, max_age)
 - **Device fingerprinting** — Blake3 hash de user-agent + accept-language + accept-encoding
+- **Request body limit** — 1MB configurable, previene memory exhaustion
+- **Request timeout** — 30s configurable, previene Slowloris
+
+### Protección Anti-DDoS
+- **Per-IP rate limiting** — Clasificación por ruta: auth=5/min, API=60/min, admin=120/min (antes era global)
+- **IP blocklist** — DashMap con auto-ban: 100 errores en 60s = block 5 minutos, TTL automático
+- **IP extraction robusta** — X-Forwarded-For + X-Real-IP (conectinfo preferido)
+- **WebSocket guard** — Max 3 conexiones/usuario, 10 msgs/s, 64KB/msg max
+- **Circuit breaker** — Apertura tras 5 fallos consecutivos, recovery 30s
+- **CORS configurable** — No más wildcard hardcodeado
 
 ### Base de Datos y Caché
 - **SQLite WAL** — Write-Ahead Logging para concurrencia, foreign keys habilitadas
@@ -286,7 +296,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 ---
 
 ### FASE 1: Fundamentos ✅
-- Workspace, config Lua, actores OTP, seguridad completa
+- Workspace, config TOML, actores OTP, seguridad completa
 - HTTP server con auth JWT
 - 0 warnings, 0 errores
 
@@ -339,7 +349,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - 10 endpoints notificación probados end-to-end
 - 0 warnings, 0 errors
 
-### FASE 6: WebSocket + Matching Realtime
+### FASE 6: WebSocket + Matching Realtime ✅
 - WebSocket connections con tokio-tungstenite
 - Matching queue en tiempo real
 - 15-second timer con opción de extender
@@ -351,7 +361,20 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - Read receipts, typing indicators
 - Message persistence + history
 
-### FASE 7: WebRTC + Streaming
+### FASE 7: Testing + Anti-DDoS Protection ✅
+- **142 tests automatizados** (49 DB, 33 security, 25 password/TOTP, 19 middleware, 16 token/device)
+- **Lua eliminado** — Reemplazado por TOML nativo + env vars (eliminó vector de RCE)
+- **Per-IP rate limiting** — Clasificación por ruta: auth=5/min, API=60/min, admin=120/min
+- **IP blocklist** — Auto-ban DashMap con TTL: 100 errores = block 5 min
+- **Request body limit** — 1MB configurable (previene memory exhaustion)
+- **Request timeout** — 30s configurable (previene Slowloris)
+- **WebSocket guard** — Max 3 conexiones/user, 10 msgs/s, 64KB/msg
+- **Security headers mejorados** — +Content-Security-Policy
+- **CORS configurable** — allowed_origins desde config (antes wildcard hardcodeado)
+- **Config TOML** — hot-reload, env vars dinámicas, sin dependencia de Lua
+- 0 warnings, 0 errores
+
+### FASE 8: WebRTC + Streaming
 - LiveKit Server + SDK integration
 - P2P calls voz/video (1:1)
 - Flash calls (llamada rápida aleatoria)
@@ -363,7 +386,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - Quality metrics + Simulcast automático
 - Billing por duración (débito wallet)
 
-### FASE 8: Economía + Pagos Cripto
+### FASE 9: Economía + Pagos Cripto
 - YSH Coins (compra, earn, gasto, staking)
 - Gift Economy con rarity + NFTs
 - Flash Call Economy (hosts ganan por llamadas)
@@ -373,7 +396,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - Transaction history + receipts
 - Anti-fraud detection en transacciones
 
-### FASE 9: Motor de IA
+### FASE 10: Motor de IA
 - Redes Neuronales (Burn): Matching, Deepfake, NSFW, Churn, Pricing
 - Algoritmos Genéticos: optimización de parámetros de matching
 - Enjambre (ABC/ACO): balanceo de carga entre servidores
@@ -383,7 +406,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - Moderación IA: text + video + auto-report + human review
 - A/B Testing Framework para features
 
-### FASE 10: Frontend (Leptos + Tailwind)
+### FASE 11: Frontend (Leptos + Tailwind)
 - Layout responsive (mobile-first)
 - Auth pages (login, register, 2FA, forgot password)
 - Discover Page (matching random con timer)
@@ -397,7 +420,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - Dark/Light mode
 - PWA + offline support (service worker)
 
-### FASE 11: Internationalization (i18n)
+### FASE 12: Internationalization (i18n)
 - Fluent (fluent-rs) integration completa
 - 5 idiomas: Español, English, Português, العربية, Français
 - Auto-detección de idioma del browser (Accept-Language)
@@ -409,7 +432,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - Translation management (keys, fallback chain)
 - Admin panel para traducciones (CRUD de strings)
 
-### FASE 12: Social Features + Moderación
+### FASE 13: Social Features + Moderación
 - User blocks (bloquear usuarios, ocultar contenido)
 - User reports (reportar contenido/usuarios con categorías)
 - Verification badges (email, identity, agency, host)
@@ -421,7 +444,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - Auto-moderation rules configurables
 - Trust score por usuario (factores: tiempo, verificación, reports)
 
-### FASE 13: Background Jobs + Testing
+### FASE 14: Background Jobs + Testing
 - Payout worker (pagos automáticos programados)
 - Analytics worker (métricas en background)
 - Moderation worker (scan de contenido pendiente)
@@ -435,7 +458,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - Mutation testing (mutmut)
 - Property-based testing (proptest)
 
-### FASE 14: Analytics + Admin Dashboard
+### FASE 15: Analytics + Admin Dashboard
 - Real-time metrics (conexiones activas, llamadas, revenue)
 - User analytics (DAU, MAU, retention, churn)
 - Revenue analytics (MRR, ARPU, LTV, gift economy metrics)
@@ -447,7 +470,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - Export to CSV/JSON
 - Custom date ranges + filters
 
-### FASE 15: Deploy + Monitoring
+### FASE 16: Deploy + Monitoring
 - Dockerfile multi-stage (build + runtime optimizado)
 - docker-compose (dev + staging + prod)
 - CI/CD pipeline (GitHub Actions)
@@ -458,7 +481,7 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - Security hardening:
   - cargo-audit (dependency vulnerabilities)
   - cargo-deny (license + supply chain)
-  - DDoS protection (rate limits + connection limits)
+  - DDoS protection (ya implementado: per-IP rate limit, IP blocklist, circuit breaker, body limit, timeout)
   - Firewall rules (iptables/nftables)
 - Backup strategy (SQLite snapshots + S3 offsite)
 - Horizontal scaling (load balancer + multiple instances)
@@ -485,6 +508,7 @@ curl -X POST http://localhost:8080/api/v1/register \
 
 # Verify
 cargo check          # 0 warnings, 0 errors
+cargo test           # 142 tests passing
 cargo build          # Clean build
 ```
 
@@ -497,18 +521,23 @@ cargo build          # Clean build
 | SQL Injection | Prepared statements + validator |
 | XSS | Auto-escaping + CSP headers |
 | CSRF | Tokens + SameSite + Origin |
-| Brute Force | Sliding window rate limit + lockout |
+| Brute Force | Per-IP rate limiting + lockout |
 | Session Hijacking | JWT rotation + HttpOnly + device fingerprint |
 | Deepfakes | Burn neural net detector real-time |
 | NSFW | AI content moderation (text + video) |
 | Fraud | Anomaly detection + behavior analysis |
-| DDoS | Rate limiting + connection limits + CDN |
+| DDoS Layer 7 | Per-IP rate limit (auth=5/min, API=60/min) + body limit 1MB + timeout 30s |
+| DDoS Layer 4 | IP blocklist (auto-ban 100 errores/60s = block 5min) + circuit breaker |
+| WebSocket Abuse | Max 3 conn/user, 10 msgs/s, 64KB/msg, heartbeat timeout |
+| Slowloris | Request timeout 30s + TCP keepalive |
+| Memory Exhaustion | Request body limit 1MB + WS message size limit |
 | Supply Chain | cargo-audit + cargo-deny + pinned versions |
 | MITM | TLS 1.3 + certificate pinning |
 | Data Breach | AES-256-GCM at rest + TLS in transit |
 | GDPR Violation | Right to erasure + data export + consent audit |
 | CCPA Violation | Do Not Sell toggle + opt-out mechanism |
 | Sanctions evasion | Geofencing + KYC/AML for large withdrawals |
+| Config RCE | Lua eliminado, TOML declarativo (sin ejecución de código) |
 
 ---
 
