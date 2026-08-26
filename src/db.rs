@@ -209,7 +209,50 @@ impl Database {
                 ('Diamond Ring', 'A sparkling diamond ring', 200, 'rare'),
                 ('Sports Car', 'A virtual sports car', 500, 'epic'),
                 ('Yacht', 'A luxury yacht', 1000, 'legendary'),
-                ('Private Island', 'Your own virtual island', 5000, 'legendary');",
+                ('Private Island', 'Your own virtual island', 5000, 'legendary');
+
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                ntype TEXT NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL,
+                data TEXT NOT NULL DEFAULT '{}',
+                read INTEGER NOT NULL DEFAULT 0,
+                channel TEXT NOT NULL DEFAULT 'in_app',
+                status TEXT NOT NULL DEFAULT 'pending',
+                retries INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                sent_at TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS notification_preferences (
+                user_id INTEGER PRIMARY KEY,
+                email_enabled INTEGER NOT NULL DEFAULT 1,
+                push_enabled INTEGER NOT NULL DEFAULT 1,
+                in_app_enabled INTEGER NOT NULL DEFAULT 1,
+                email_gifts INTEGER NOT NULL DEFAULT 1,
+                email_calls INTEGER NOT NULL DEFAULT 1,
+                email_moments INTEGER NOT NULL DEFAULT 1,
+                email_marketing INTEGER NOT NULL DEFAULT 0,
+                push_gifts INTEGER NOT NULL DEFAULT 1,
+                push_calls INTEGER NOT NULL DEFAULT 1,
+                push_moments INTEGER NOT NULL DEFAULT 1,
+                quiet_hours_start TEXT,
+                quiet_hours_end TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS push_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token TEXT NOT NULL,
+                platform TEXT NOT NULL DEFAULT 'web',
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );",
         )?;
         Ok(())
     }
@@ -1202,6 +1245,7 @@ impl Database {
             "SELECT COALESCE(SUM(amount), 0) FROM transactions",
             [], |r| r.get(0),
         )?;
+        let notifications: i64 = conn.query_row("SELECT COUNT(*) FROM notifications", [], |r| r.get(0))?;
         Ok(serde_json::json!({
             "users": users,
             "agencies": agencies,
@@ -1209,6 +1253,262 @@ impl Database {
             "moments": moments,
             "gifts": gifts,
             "total_transaction_volume": total_volume,
+            "notifications": notifications,
         }))
+    }
+
+    pub fn create_notification(
+        &self,
+        user_id: i64,
+        ntype: &str,
+        title: &str,
+        body: &str,
+        data: &str,
+        channel: &str,
+    ) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO notifications (user_id, ntype, title, body, data, channel)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![user_id, ntype, title, body, data, channel],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn get_notifications(&self, user_id: i64, limit: i64) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, ntype, title, body, data, read, channel, status, created_at
+             FROM notifications WHERE user_id = ?1
+             ORDER BY created_at DESC LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![user_id, limit], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "type": row.get::<_, String>(1)?,
+                "title": row.get::<_, String>(2)?,
+                "body": row.get::<_, String>(3)?,
+                "data": row.get::<_, String>(4)?,
+                "read": row.get::<_, i32>(5)? != 0,
+                "channel": row.get::<_, String>(6)?,
+                "status": row.get::<_, String>(7)?,
+                "created_at": row.get::<_, String>(8)?,
+            }))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn get_unread_count(&self, user_id: i64) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM notifications WHERE user_id = ?1 AND read = 0",
+            params![user_id],
+            |r| r.get(0),
+        )?;
+        Ok(count)
+    }
+
+    pub fn mark_notification_read(&self, user_id: i64, notification_id: i64) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let updated = conn.execute(
+            "UPDATE notifications SET read = 1 WHERE id = ?1 AND user_id = ?2",
+            params![notification_id, user_id],
+        )?;
+        Ok(updated > 0)
+    }
+
+    pub fn mark_all_read(&self, user_id: i64) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        let updated = conn.execute(
+            "UPDATE notifications SET read = 1 WHERE user_id = ?1 AND read = 0",
+            params![user_id],
+        )?;
+        Ok(updated as usize)
+    }
+
+    #[allow(dead_code)]
+    pub fn update_notification_status(
+        &self,
+        notification_id: i64,
+        status: &str,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE notifications SET status = ?1, sent_at = datetime('now') WHERE id = ?2",
+            params![status, notification_id],
+        )?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn increment_notification_retries(&self, notification_id: i64) -> Result<i32> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE notifications SET retries = retries + 1 WHERE id = ?1",
+            params![notification_id],
+        )?;
+        let retries: i32 = conn.query_row(
+            "SELECT retries FROM notifications WHERE id = ?1",
+            params![notification_id],
+            |r| r.get(0),
+        )?;
+        Ok(retries)
+    }
+
+    #[allow(dead_code)]
+    pub fn get_pending_notifications(&self, limit: i64) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT n.id, n.user_id, n.ntype, n.title, n.body, n.data, n.channel, n.retries,
+                    u.email, u.username
+             FROM notifications n
+             JOIN users u ON n.user_id = u.id
+             WHERE n.status = 'pending' AND n.retries < 3
+             ORDER BY n.created_at ASC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(params![limit], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "user_id": row.get::<_, i64>(1)?,
+                "type": row.get::<_, String>(2)?,
+                "title": row.get::<_, String>(3)?,
+                "body": row.get::<_, String>(4)?,
+                "data": row.get::<_, String>(5)?,
+                "channel": row.get::<_, String>(6)?,
+                "retries": row.get::<_, i32>(7)?,
+                "email": row.get::<_, String>(8)?,
+                "username": row.get::<_, String>(9)?,
+            }))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn get_notification_preference(&self, user_id: i64) -> Result<serde_json::Value> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT email_enabled, push_enabled, in_app_enabled,
+                    email_gifts, email_calls, email_moments, email_marketing,
+                    push_gifts, push_calls, push_moments,
+                    quiet_hours_start, quiet_hours_end
+             FROM notification_preferences WHERE user_id = ?1",
+            params![user_id],
+            |row| {
+                Ok(serde_json::json!({
+                    "email_enabled": row.get::<_, i32>(0)? != 0,
+                    "push_enabled": row.get::<_, i32>(1)? != 0,
+                    "in_app_enabled": row.get::<_, i32>(2)? != 0,
+                    "email_gifts": row.get::<_, i32>(3)? != 0,
+                    "email_calls": row.get::<_, i32>(4)? != 0,
+                    "email_moments": row.get::<_, i32>(5)? != 0,
+                    "email_marketing": row.get::<_, i32>(6)? != 0,
+                    "push_gifts": row.get::<_, i32>(7)? != 0,
+                    "push_calls": row.get::<_, i32>(8)? != 0,
+                    "push_moments": row.get::<_, i32>(9)? != 0,
+                    "quiet_hours_start": row.get::<_, Option<String>>(10)?,
+                    "quiet_hours_end": row.get::<_, Option<String>>(11)?,
+                }))
+            },
+        );
+        match result {
+            Ok(prefs) => Ok(prefs),
+            Err(_) => {
+                conn.execute(
+                    "INSERT OR IGNORE INTO notification_preferences (user_id) VALUES (?1)",
+                    params![user_id],
+                )?;
+                Ok(serde_json::json!({
+                    "email_enabled": true,
+                    "push_enabled": true,
+                    "in_app_enabled": true,
+                    "email_gifts": true,
+                    "email_calls": true,
+                    "email_moments": true,
+                    "email_marketing": false,
+                    "push_gifts": true,
+                    "push_calls": true,
+                    "push_moments": true,
+                    "quiet_hours_start": null,
+                    "quiet_hours_end": null,
+                }))
+            }
+        }
+    }
+
+    pub fn update_notification_preference(
+        &self,
+        user_id: i64,
+        field: &str,
+        value: bool,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR IGNORE INTO notification_preferences (user_id) VALUES (?1)",
+            params![user_id],
+        )?;
+        let sql = format!(
+            "UPDATE notification_preferences SET {} = ?1 WHERE user_id = ?2",
+            field
+        );
+        conn.execute(&sql, params![value as i32, user_id])?;
+        Ok(())
+    }
+
+    pub fn update_quiet_hours(
+        &self,
+        user_id: i64,
+        start: &str,
+        end: &str,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR IGNORE INTO notification_preferences (user_id) VALUES (?1)",
+            params![user_id],
+        )?;
+        conn.execute(
+            "UPDATE notification_preferences SET quiet_hours_start = ?1, quiet_hours_end = ?2
+             WHERE user_id = ?3",
+            params![start, end, user_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn register_push_token(
+        &self,
+        user_id: i64,
+        token: &str,
+        platform: &str,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO push_tokens (user_id, token, platform) VALUES (?1, ?2, ?3)",
+            params![user_id, token, platform],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_push_tokens(&self, user_id: i64) -> Result<Vec<serde_json::Value>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, token, platform, created_at FROM push_tokens
+             WHERE user_id = ?1 AND active = 1",
+        )?;
+        let rows = stmt.query_map(params![user_id], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "token": row.get::<_, String>(1)?,
+                "platform": row.get::<_, String>(2)?,
+                "created_at": row.get::<_, String>(3)?,
+            }))
+        })?;
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn deactivate_push_token(&self, user_id: i64, token: &str) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let updated = conn.execute(
+            "UPDATE push_tokens SET active = 0 WHERE user_id = ?1 AND token = ?2",
+            params![user_id, token],
+        )?;
+        Ok(updated > 0)
     }
 }

@@ -5,6 +5,7 @@ mod cache;
 mod config;
 mod db;
 mod middleware;
+mod notification;
 mod observability;
 mod security;
 mod server;
@@ -138,9 +139,17 @@ async fn main() -> Result<()> {
     )
     .await?;
 
+    let (notification_actor, _notification_handle) = ractor::Actor::spawn(
+        Some("notification-actor".to_string()),
+        actors::notification_actor::NotificationActor,
+        (),
+    )
+    .await?;
+
     use actors::config_actor::ConfigActorMsg;
     use actors::crypto_actor::CryptoActorMsg;
     use actors::database_actor::DatabaseActorMsg;
+    use actors::notification_actor::NotificationMsg;
     use actors::session_supervisor::SessionSupervisorMsg;
     use actors::supervisor_tree::SupervisorTreeMsg;
 
@@ -182,6 +191,14 @@ async fn main() -> Result<()> {
     let _ = ai_actor.send_message(actors::ai_actor::AIActorMsg::DeepfakeCheck {
         user_id: "system".to_string(),
     });
+    let _ = notification_actor.send_message(NotificationMsg::SendEmail {
+        notification_id: 0,
+        to: "test@ysh.app".into(),
+        subject: "YSH startup probe".into(),
+        body: "System notification check".into(),
+        username: "system".into(),
+    });
+    let _ = notification_actor.send_message(NotificationMsg::GetStats);
 
     use actors::server_actor::ServerActorMsg;
     let _ = server_actor.send_message(ServerActorMsg::Start);
@@ -236,6 +253,7 @@ async fn main() -> Result<()> {
         secure_encryption_key,
         encrypted_key,
         session_actor,
+        notification_actor,
         rate_limiter,
         circuit_breaker,
     };

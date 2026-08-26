@@ -327,13 +327,17 @@ Plataforma web 100% Rust: web-first, sin app stores, pagos cripto, IA avanzada y
 - 35+ endpoints probados end-to-end
 - 0 warnings, 0 errors
 
-### FASE 5: Notificaciones
-- Email SMTP transaccional (lettre): verificación, reset, welcome
-- Push notifications (FCM) para Android/Web
-- In-app notifications con preferencias granulares
-- Digest emails (resumen semanal de actividad)
-- Notification queue con retry y dead-letter
-- Template engine para emails HTML
+### FASE 5: Notificaciones ✅
+- Email SMTP transaccional (lettre + rustls): 7 templates HTML dark-themed (welcome, verify, reset, gift, call, like, digest)
+- Push notifications infrastructure (FCM placeholder, token registration)
+- In-app notifications con CRUD completo (create, list, mark_read, mark_all_read)
+- NotificationActor con queue, retry tracking y dead-letter support
+- Preferences granulares por canal (email/push/in_app) y tipo (gifts/calls/moments/marketing)
+- Quiet hours (horario de no molestar configurable)
+- Push token management (register, list, remove, deactivate)
+- 14 tablas SQLite: +notifications, notification_preferences, push_tokens
+- 10 endpoints notificación probados end-to-end
+- 0 warnings, 0 errors
 
 ### FASE 6: WebSocket + Matching Realtime
 - WebSocket connections con tokio-tungstenite

@@ -10,6 +10,7 @@ use axum::{
 use std::sync::Arc;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
+use crate::actors::notification_actor::NotificationMsg;
 use crate::actors::session_supervisor::SessionSupervisorMsg;
 use crate::cache::{Cache, RateLimitCache, SessionCache};
 use crate::config::YshConfig;
@@ -29,6 +30,7 @@ pub struct AppState {
     pub secure_encryption_key: SecureBuffer,
     pub encrypted_key: EncryptedKey,
     pub session_actor: ractor::ActorRef<SessionSupervisorMsg>,
+    pub notification_actor: ractor::ActorRef<NotificationMsg>,
     pub rate_limiter: GlobalRateLimiter,
     pub circuit_breaker: CircuitBreaker,
 }
@@ -191,6 +193,48 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/admin/stats", get(crate::api::admin::platform_stats));
 
+    let notification_routes = Router::new()
+        .route(
+            "/notifications",
+            get(crate::api::notification::list_notifications),
+        )
+        .route(
+            "/notification/{notification_id}/read",
+            post(crate::api::notification::mark_read),
+        )
+        .route(
+            "/notifications/read-all",
+            post(crate::api::notification::mark_all_read),
+        )
+        .route(
+            "/notifications/preferences",
+            get(crate::api::notification::get_preferences),
+        )
+        .route(
+            "/notifications/preferences",
+            post(crate::api::notification::update_preference),
+        )
+        .route(
+            "/notifications/quiet-hours",
+            post(crate::api::notification::update_quiet_hours),
+        )
+        .route(
+            "/notifications/push/register",
+            post(crate::api::notification::register_push_token),
+        )
+        .route(
+            "/notifications/push/remove",
+            post(crate::api::notification::remove_push_token),
+        )
+        .route(
+            "/notifications/push/tokens",
+            get(crate::api::notification::get_push_tokens),
+        )
+        .route(
+            "/notifications/test",
+            post(crate::api::notification::send_test_notification),
+        );
+
     let config_routes = Router::new().route("/config", get(get_config));
 
     let api_routes = Router::new()
@@ -207,7 +251,8 @@ pub fn build_router(state: AppState) -> Router {
         .merge(wallet_routes)
         .merge(gift_routes)
         .merge(moment_routes)
-        .merge(admin_routes);
+        .merge(admin_routes)
+        .merge(notification_routes);
 
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::any())
