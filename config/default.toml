@@ -135,3 +135,29 @@ auto_freeze_on_fraud = true
 min_cost_per_min = 1
 default_cost_per_min = 5
 host_earnings_pct = 0.70
+
+# ═══════════════════════════════════════════
+# BACKUP / SNAPSHOT
+# ═══════════════════════════════════════════
+[backup]
+enabled = false
+interval_secs = 3600
+backup_dir = "./backups"
+max_backups = 7
+compact_before_backup = true
+
+# ═══════════════════════════════════════════
+# INTEGRITY CHECK
+# ═══════════════════════════════════════════
+[integrity]
+check_on_startup = true
+auto_repair = true
+
+# ═══════════════════════════════════════════
+# DATABASE ENCRYPTION AT REST
+# ═══════════════════════════════════════════
+[db_encryption]
+enabled = false
+key_env = "YSH_DB_KEY"
+key_file = "./db_keyfile"
+algorithm = "AES-256-GCM"

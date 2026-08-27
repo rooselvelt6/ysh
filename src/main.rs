@@ -4,6 +4,7 @@ mod auth;
 mod cache;
 mod config;
 mod db;
+mod encryption;
 mod middleware;
 mod notification;
 mod observability;

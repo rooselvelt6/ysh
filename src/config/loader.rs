@@ -47,6 +47,12 @@ struct RawConfig {
     ddos: super::settings::DdosConfig,
     cors: super::settings::CorsConfig,
     economy: super::settings::EconomyConfig,
+    #[serde(default)]
+    backup: super::settings::BackupConfig,
+    #[serde(default)]
+    integrity: super::settings::IntegrityConfig,
+    #[serde(default)]
+    db_encryption: super::settings::DbEncryptionConfig,
 }
 
 #[derive(Deserialize)]
@@ -173,6 +179,9 @@ impl RawConfig {
             ddos: self.ddos,
             cors: self.cors,
             economy: self.economy,
+            backup: self.backup,
+            integrity: self.integrity,
+            db_encryption: self.db_encryption,
         })
     }
 }

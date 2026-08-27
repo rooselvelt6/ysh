@@ -16,6 +16,12 @@ pub struct YshConfig {
     pub ddos: DdosConfig,
     pub cors: CorsConfig,
     pub economy: EconomyConfig,
+    #[serde(default)]
+    pub backup: BackupConfig,
+    #[serde(default)]
+    pub integrity: IntegrityConfig,
+    #[serde(default)]
+    pub db_encryption: DbEncryptionConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -224,4 +230,78 @@ fn default_fraud() -> FraudConfig {
 }
 fn default_call_billing() -> CallBillingConfig {
     CallBillingConfig { min_cost_per_min: 1, default_cost_per_min: 5, host_earnings_pct: 0.70 }
+}
+
+// ═══════════════════════════════════════════
+// BACKUP CONFIG
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupConfig {
+    pub enabled: bool,
+    pub interval_secs: u64,
+    pub backup_dir: String,
+    pub max_backups: usize,
+    pub compact_before_backup: bool,
+}
+
+impl Default for BackupConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            interval_secs: 3600,
+            backup_dir: "./backups".into(),
+            max_backups: 7,
+            compact_before_backup: true,
+        }
+    }
+}
+
+// ═══════════════════════════════════════════
+// INTEGRITY CONFIG
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntegrityConfig {
+    pub check_on_startup: bool,
+    pub auto_repair: bool,
+}
+
+impl Default for IntegrityConfig {
+    fn default() -> Self {
+        Self {
+            check_on_startup: true,
+            auto_repair: true,
+        }
+    }
+}
+
+// ═══════════════════════════════════════════
+// DB ENCRYPTION CONFIG
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DbEncryptionConfig {
+    pub enabled: bool,
+    #[serde(default)]
+    pub key_env: String,
+    #[serde(default)]
+    pub key_file: String,
+    #[serde(default = "default_db_enc_algorithm")]
+    pub algorithm: String,
+}
+
+fn default_db_enc_algorithm() -> String {
+    "AES-256-GCM".into()
+}
+
+impl Default for DbEncryptionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            key_env: "YSH_DB_KEY".into(),
+            key_file: "./db_keyfile".into(),
+            algorithm: default_db_enc_algorithm(),
+        }
+    }
 }

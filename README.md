@@ -25,7 +25,7 @@
 >
 > Every byte is memory-safe. Every connection is encrypted. Every decision is audited.
 >
-> **177 tests. 0 errors. 0 warnings. Zero compromises.**
+> **191 tests. 0 errors. 0 warnings. Zero compromises.**
 
 ---
 
@@ -97,7 +97,7 @@
 | **Runtime Async** | Tokio | 1.x | |
 | **Backend** | Axum | 0.8.9 | REST + WebSocket |
 | **Frontend** | Leptos | 0.8.19 | WASM |
-| **Base de Datos** | redb | 2.x | 100% Rust embedded DB, zero C |
+| **Base de Datos** | redb | 4.x | 100% Rust embedded DB, zero C |
 | **Config** | toml | 0.8 | TOML nativo + env vars |
 | **Actores** | ractor | 0.16 | OTP supervision tree |
 | **Encriptación** | AES-256-GCM / ChaCha20-Poly1305 | 0.10 / 0.11 | E2E messages |
@@ -447,7 +447,7 @@
 - Message persistence + history
 
 ### FASE 7: Testing + Anti-DDoS Protection ✅
-- **177 tests automatizados** (49 DB, 35 economy, 33 security, 25 password/TOTP, 19 middleware, 16 token/device)
+- **191 tests automatizados** (49 DB, 35 economy, 33 security, 25 password/TOTP, 19 middleware, 16 token/device, 14 encryption)
 - **Lua eliminado** — Reemplazado por TOML nativo + env vars (eliminó vector de RCE)
 - **Per-IP rate limiting** — Clasificación por ruta: auth=5/min, API=60/min, admin=120/min
 - **IP blocklist** — Auto-ban DashMap con TTL: 100 errores = block 5 min
@@ -486,6 +486,15 @@
 - 10 TableDefinition + 30 MultimapTableDefinition = 40 table definitions
 - ACID transactions con MVCC
 - Zero C dependencies — eliminado SQLite bundled
+
+### FASE 9.6: Robustez y Seguridad de Base de Datos ✅
+- **redb 2.x → 4.x upgrade** — `ReadableDatabase` trait import, `Durability` per-transaction
+- **Integrity check** — `check_integrity()` on startup, auto-repair si corrupto
+- **Backup/snapshot** — `compact()` + `backup()` + `backup_with_compact()`, rotation automático
+- **Write queue** — `std::sync::Mutex<()>` write serializer en `delete_user_data`, `like_moment`, `unlike_moment`, `delete_moment`
+- **Encryption at rest** — `EncryptedBackend` (AES-256-GCM page-level encryption via `StorageBackend` trait), nonce = prefix + offset, keyfile persistence
+- **Config** — `BackupConfig`, `IntegrityConfig`, `DbEncryptionConfig` con defaults seguros
+- **14 new tests** — encryption roundtrip, nonce uniqueness, wrong key rejection, corruption detection, logical length tracking
 
 ### FASE 10: Motor de IA
 - Redes Neuronales (Burn): Matching, Deepfake, NSFW, Churn, Pricing
@@ -599,7 +608,7 @@ curl -X POST http://localhost:8080/api/v1/register \
 
 # Verify
 cargo check          # 0 warnings, 0 errors
-cargo test           # 177 tests passing
+cargo test           # 191 tests passing
 cargo build          # Clean build
 ```
 

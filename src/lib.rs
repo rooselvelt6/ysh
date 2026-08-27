@@ -4,6 +4,7 @@ pub mod auth;
 pub mod cache;
 pub mod config;
 pub mod db;
+pub mod encryption;
 pub mod middleware;
 pub mod notification;
 pub mod observability;

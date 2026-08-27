@@ -1,5 +1,5 @@
 use anyhow::Result;
-use redb::{Database as RedbDatabase, TableDefinition, MultimapTableDefinition, ReadableTable, ReadableMultimapTable};
+use redb::{Database as RedbDatabase, TableDefinition, MultimapTableDefinition, ReadableTable, ReadableMultimapTable, ReadableDatabase};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
@@ -303,6 +303,25 @@ pub struct NftGift {
 }
 
 // ═══════════════════════════════════════════
+// INTEGRITY TYPES
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
+pub struct IntegrityReport {
+    pub status: IntegrityStatus,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum IntegrityStatus {
+    Ok,
+    Repaired,
+    Corrupted,
+}
+
+// ═══════════════════════════════════════════
 // DATABASE
 // ═══════════════════════════════════════════
 
@@ -310,6 +329,8 @@ pub struct Database {
     inner: RedbDatabase,
     #[allow(dead_code)]
     next_id: Mutex<i64>,
+    db_path: std::path::PathBuf,
+    write_lock: std::sync::Mutex<()>,
 }
 
 fn to_json<T: Serialize>(v: &T) -> String {
@@ -335,6 +356,26 @@ impl Database {
         let db = Self {
             inner,
             next_id: Mutex::new(1),
+            db_path: std::path::PathBuf::from(path),
+            write_lock: std::sync::Mutex::new(()),
+        };
+        db.init_tables()?;
+        db.seed_gift_catalog()?;
+        Ok(db)
+    }
+
+    /// Open database with AES-256-GCM encryption at rest.
+    /// `key` must be a 32-byte encryption key.
+    #[allow(dead_code)]
+    pub fn new_encrypted(path: &str, key: &[u8; 32]) -> Result<Self> {
+        let backend = crate::encryption::EncryptedBackend::open(path, key)?;
+        let inner = RedbDatabase::builder()
+            .create_with_backend(backend)?;
+        let db = Self {
+            inner,
+            next_id: Mutex::new(1),
+            db_path: std::path::PathBuf::from(path),
+            write_lock: std::sync::Mutex::new(()),
         };
         db.init_tables()?;
         db.seed_gift_catalog()?;
@@ -356,6 +397,7 @@ impl Database {
     }
 
     fn next_seq(&self, table: &str) -> i64 {
+        let _lock = self.write_lock.lock().unwrap_or_else(|e| e.into_inner());
         let txn = self.inner.begin_write().unwrap();
         let next = {
             let counters = txn.open_table(T_COUNTER).unwrap();
@@ -382,6 +424,7 @@ impl Database {
     }
 
     fn put_json<T: Serialize>(&self, table: TableDefinition<&str, &str>, key: &str, val: &T) -> Result<()> {
+        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         {
             let mut t = txn.open_table(table)?;
@@ -392,6 +435,7 @@ impl Database {
     }
 
     fn mm_add(&self, table: MultimapTableDefinition<&str, &str>, key: &str, val: &str) -> Result<()> {
+        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         {
             let mut t = txn.open_multimap_table(table)?;
@@ -422,6 +466,7 @@ impl Database {
     }
 
     fn mm_remove_all(&self, table: MultimapTableDefinition<&str, &str>, key: &str) -> Result<()> {
+        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         {
             let mut t = txn.open_multimap_table(table)?;
@@ -432,6 +477,7 @@ impl Database {
     }
 
     fn mm_remove_one(&self, table: MultimapTableDefinition<&str, &str>, key: &str, val: &str) -> Result<bool> {
+        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         let removed = {
             let mut t = txn.open_multimap_table(table)?;
@@ -605,6 +651,7 @@ impl Database {
         self.mm_remove_all(MM_RECOVERY, &user_id.to_string())?;
         self.mm_remove_all(MM_CONSENT, &user_id.to_string())?;
         self.mm_remove_all(MM_DEVICE, &user_id.to_string())?;
+        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         { let mut t = txn.open_table(T_USER)?; t.remove(user_id.to_string().as_str())?; }
         txn.commit()?;
@@ -649,6 +696,55 @@ impl Database {
     pub fn health_check(&self) -> Result<()> {
         let _ = self.inner.begin_read()?;
         Ok(())
+    }
+
+    // ═══════════════════════════════════════════
+    // INTEGRITY CHECK (Fix 4)
+    // ═══════════════════════════════════════════
+
+    #[allow(dead_code)]
+    pub fn check_integrity(&self) -> Result<IntegrityReport> {
+        let mut db = RedbDatabase::create(&self.db_path)?;
+        let result = db.check_integrity()?;
+        let (status, message) = match result {
+            true => (IntegrityStatus::Ok, "Database integrity check passed".into()),
+            false => (IntegrityStatus::Repaired, "Database was repaired during integrity check".into()),
+        };
+        Ok(IntegrityReport { status, message })
+    }
+
+    // ═══════════════════════════════════════════
+    // BACKUP / SNAPSHOT (Fix 3)
+    // ═══════════════════════════════════════════
+
+    #[allow(dead_code)]
+    pub fn compact(&self) -> Result<bool> {
+        let mut db = RedbDatabase::create(&self.db_path)?;
+        let performed = db.compact()?;
+        Ok(performed)
+    }
+
+    #[allow(dead_code)]
+    pub fn backup(&self, dest: impl AsRef<std::path::Path>) -> Result<u64> {
+        let bytes_copied = std::fs::copy(&self.db_path, dest.as_ref())?;
+        tracing::info!(
+            src = %self.db_path.display(),
+            dest = %dest.as_ref().display(),
+            bytes = bytes_copied,
+            "Database backup created"
+        );
+        Ok(bytes_copied)
+    }
+
+    #[allow(dead_code)]
+    pub fn backup_with_compact(&self, dest: impl AsRef<std::path::Path>) -> Result<u64> {
+        self.compact()?;
+        self.backup(dest)
+    }
+
+    #[allow(dead_code)]
+    pub fn db_path(&self) -> &std::path::Path {
+        &self.db_path
     }
 
     pub fn user_count(&self) -> Result<i64> {
@@ -1103,6 +1199,7 @@ impl Database {
     }
 
     pub fn like_moment(&self, _user_id: i64, moment_id: i64) -> Result<()> {
+        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let key = format!("{}_{}", _user_id, moment_id);
         let txn = self.inner.begin_write()?;
         {
@@ -1114,6 +1211,7 @@ impl Database {
     }
 
     pub fn unlike_moment(&self, _user_id: i64, moment_id: i64) -> Result<()> {
+        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let key = format!("{}_{}", _user_id, moment_id);
         let txn = self.inner.begin_write()?;
         { let mut t = txn.open_multimap_table(MM_MOMENT_LIKE)?; t.remove(key.as_str(), "1")?; }
@@ -1134,6 +1232,7 @@ impl Database {
     }
 
     pub fn delete_moment(&self, _user_id: i64, moment_id: i64) -> Result<bool> {
+        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         let removed = {
             let mut t = txn.open_multimap_table(MM_MOMENT)?;
