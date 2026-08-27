@@ -41,6 +41,33 @@ pub enum ClientMessage {
     KnockKnockAccept {
         session_id: i64,
     },
+    CallInvite {
+        target_user_id: i64,
+        call_type: String,
+    },
+    CallAccept {
+        caller_id: i64,
+    },
+    CallReject {
+        caller_id: i64,
+    },
+    CallHangup {
+        peer_id: i64,
+    },
+    Offer {
+        peer_id: i64,
+        sdp: String,
+    },
+    Answer {
+        peer_id: i64,
+        sdp: String,
+    },
+    IceCandidate {
+        peer_id: i64,
+        candidate: String,
+        sdp_mid: String,
+        sdp_m_line_index: u32,
+    },
     SetStatus {
         status: String,
     },
@@ -103,6 +130,42 @@ pub enum ServerMessage {
     MatchDeclined {
         reason: String,
     },
+    CallInviting {
+        from_user_id: i64,
+        from_username: String,
+        call_type: String,
+    },
+    CallRinging {
+        call_id: String,
+        caller_id: i64,
+        caller_username: String,
+        call_type: String,
+    },
+    CallAccepted {
+        call_id: String,
+        peer_id: i64,
+        peer_username: String,
+    },
+    CallRejected {
+        reason: String,
+    },
+    CallEnded {
+        reason: String,
+    },
+    Offer {
+        from_user_id: i64,
+        sdp: String,
+    },
+    Answer {
+        from_user_id: i64,
+        sdp: String,
+    },
+    IceCandidate {
+        from_user_id: i64,
+        candidate: String,
+        sdp_mid: String,
+        sdp_m_line_index: u32,
+    },
     PresenceUpdate {
         user_id: i64,
         status: String,
@@ -128,6 +191,17 @@ pub struct ConnectionManager {
     pub connections: HashMap<i64, WsSender>,
     pub online_users: HashMap<i64, String>,
     pub broadcast: UserBroadcast,
+    pub active_calls: HashMap<String, CallState>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CallState {
+    pub call_id: String,
+    pub caller_id: i64,
+    pub callee_id: i64,
+    pub call_type: String,
+    pub status: String,
+    pub started_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl ConnectionManager {
@@ -137,6 +211,7 @@ impl ConnectionManager {
             connections: HashMap::new(),
             online_users: HashMap::new(),
             broadcast,
+            active_calls: HashMap::new(),
         }
     }
 
@@ -188,6 +263,53 @@ impl ConnectionManager {
             user_id,
             status,
         });
+    }
+
+    pub fn create_call(&mut self, caller_id: i64, callee_id: i64, call_type: String) -> String {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+        let call_id = format!("call_{}_{}", ts, caller_id);
+        self.active_calls.insert(call_id.clone(), CallState {
+            call_id: call_id.clone(),
+            caller_id,
+            callee_id,
+            call_type,
+            status: "ringing".into(),
+            started_at: None,
+        });
+        call_id
+    }
+
+    pub fn accept_call(&mut self, call_id: &str) -> Option<&CallState> {
+        if let Some(call) = self.active_calls.get_mut(call_id) {
+            call.status = "connected".into();
+            call.started_at = Some(chrono::Utc::now());
+        }
+        self.active_calls.get(call_id)
+    }
+
+    pub fn end_call(&mut self, call_id: &str) -> Option<CallState> {
+        self.active_calls.remove(call_id)
+    }
+
+    pub fn find_call_by_users(&self, user_a: i64, user_b: i64) -> Option<String> {
+        for (id, call) in &self.active_calls {
+            if (call.caller_id == user_a && call.callee_id == user_b)
+                || (call.caller_id == user_b && call.callee_id == user_a)
+            {
+                return Some(id.clone());
+            }
+        }
+        None
+    }
+
+    pub fn find_call_by_user(&self, user_id: i64) -> Option<String> {
+        for (id, call) in &self.active_calls {
+            if call.caller_id == user_id || call.callee_id == user_id {
+                return Some(id.clone());
+            }
+        }
+        None
     }
 }
 
@@ -415,6 +537,74 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                                     mgr.send_to(uid, &msg);
                                 }
                             }
+                        }
+                        ClientMessage::CallInvite { target_user_id, call_type } => {
+                            let mut mgr = ws_connections_clone.lock().await;
+                            if !mgr.is_online(target_user_id) {
+                                drop(mgr);
+                                let err = ServerMessage::Error { message: "User is offline".into() };
+                                if let Ok(json) = serde_json::to_string(&err) { let _ = tx.send(json); }
+                                continue;
+                            }
+                            let caller_username = db.find_user_by_id(user_id)
+                                .ok().flatten().map(|u| u.username).unwrap_or_else(|| "unknown".into());
+                            let call_id = mgr.create_call(user_id, target_user_id, call_type.clone());
+                            mgr.send_to(target_user_id, &ServerMessage::CallRinging {
+                                call_id: call_id.clone(),
+                                caller_id: user_id,
+                                caller_username,
+                                call_type,
+                            });
+                            mgr.send_to(user_id, &ServerMessage::CallInviting {
+                                from_user_id: target_user_id,
+                                from_username: "peer".into(),
+                                call_type: "video".into(),
+                            });
+                        }
+                        ClientMessage::CallAccept { caller_id } => {
+                            let mut mgr = ws_connections_clone.lock().await;
+                            if let Some(call_id) = mgr.find_call_by_users(user_id, caller_id) {
+                                mgr.accept_call(&call_id);
+                                let callee_username = db.find_user_by_id(user_id)
+                                    .ok().flatten().map(|u| u.username).unwrap_or_else(|| "unknown".into());
+                                mgr.send_to(caller_id, &ServerMessage::CallAccepted {
+                                    call_id: call_id.clone(),
+                                    peer_id: user_id,
+                                    peer_username: callee_username,
+                                });
+                            }
+                        }
+                        ClientMessage::CallReject { caller_id } => {
+                            let mut mgr = ws_connections_clone.lock().await;
+                            if let Some(call_id) = mgr.find_call_by_users(user_id, caller_id) {
+                                mgr.end_call(&call_id);
+                            }
+                            mgr.send_to(caller_id, &ServerMessage::CallRejected {
+                                reason: "Call rejected".into(),
+                            });
+                        }
+                        ClientMessage::CallHangup { peer_id } => {
+                            let mut mgr = ws_connections_clone.lock().await;
+                            if let Some(call_id) = mgr.find_call_by_users(user_id, peer_id) {
+                                mgr.end_call(&call_id);
+                            }
+                            mgr.send_to(peer_id, &ServerMessage::CallEnded {
+                                reason: "Call ended".into(),
+                            });
+                        }
+                        ClientMessage::Offer { peer_id, sdp } => {
+                            let mgr = ws_connections_clone.lock().await;
+                            mgr.send_to(peer_id, &ServerMessage::Offer { from_user_id: user_id, sdp });
+                        }
+                        ClientMessage::Answer { peer_id, sdp } => {
+                            let mgr = ws_connections_clone.lock().await;
+                            mgr.send_to(peer_id, &ServerMessage::Answer { from_user_id: user_id, sdp });
+                        }
+                        ClientMessage::IceCandidate { peer_id, candidate, sdp_mid, sdp_m_line_index } => {
+                            let mgr = ws_connections_clone.lock().await;
+                            mgr.send_to(peer_id, &ServerMessage::IceCandidate {
+                                from_user_id: user_id, candidate, sdp_mid, sdp_m_line_index,
+                            });
                         }
                         ClientMessage::SetStatus { status } => {
                             let mut mgr = ws_connections_clone.lock().await;

@@ -100,3 +100,89 @@ pub fn go(path: &str) {
     let nav = leptos_router::hooks::use_navigate();
     nav(path, leptos_router::NavigateOptions::default());
 }
+
+use std::cell::RefCell;
+
+thread_local! {
+    static WS_SEND: RefCell<Option<Box<dyn FnMut(String)>>> = RefCell::new(None);
+}
+
+pub fn ws_signaling_send(msg: &str) {
+    WS_SEND.with(|s| {
+        if let Some(ref mut send_fn) = *s.borrow_mut() {
+            send_fn(msg.to_string());
+        }
+    });
+}
+
+pub fn ws_set_sender(sender: Box<dyn FnMut(String)>) {
+    WS_SEND.with(|s| *s.borrow_mut() = Some(sender));
+}
+
+pub mod ws_signaling {
+    use wasm_bindgen::prelude::*;
+    use wasm_bindgen::JsCast;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    pub type WsCallback = Box<dyn FnMut(String)>;
+
+    pub struct WsClient {
+        ws: Option<web_sys::WebSocket>,
+        on_message: Rc<RefCell<Option<WsCallback>>>,
+    }
+
+    impl WsClient {
+        pub fn new() -> Self {
+            Self { ws: None, on_message: Rc::new(RefCell::new(None)) }
+        }
+
+        pub fn connect(&mut self, token: &str) -> Result<(), JsValue> {
+            let win = web_sys::window().ok_or_else(|| JsValue::from_str("no window"))?;
+            let loc = win.location();
+            let protocol = if loc.protocol().unwrap_or_default() == "https:" { "wss:" } else { "ws:" };
+            let host = loc.host().unwrap_or_default();
+            let url = format!("{}//{}/ws?token={}", protocol, host, token);
+
+            let ws = web_sys::WebSocket::new(&url)?;
+            ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
+
+            let on_message = self.on_message.clone();
+            let closure = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
+                if let Some(data) = event.data().as_string() {
+                    if let Some(ref mut cb) = *on_message.borrow_mut() {
+                        cb(data);
+                    }
+                }
+            }) as Box<dyn FnMut(_)>);
+            ws.set_onmessage(Some(closure.as_ref().unchecked_ref()));
+            closure.forget();
+
+            self.ws = Some(ws);
+            Ok(())
+        }
+
+        pub fn send(&self, msg: &str) {
+            if let Some(ref ws) = self.ws {
+                let _ = ws.send_with_str(msg);
+            }
+        }
+
+        pub fn set_on_message(&self, cb: WsCallback) {
+            *self.on_message.borrow_mut() = Some(cb);
+        }
+
+        pub fn close(&mut self) {
+            if let Some(ref ws) = self.ws {
+                let _ = ws.close();
+            }
+            self.ws = None;
+        }
+    }
+
+    impl Drop for WsClient {
+        fn drop(&mut self) {
+            self.close();
+        }
+    }
+}
