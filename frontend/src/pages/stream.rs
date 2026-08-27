@@ -6,6 +6,7 @@ use crate::store;
 
 // Call states
 #[derive(Clone, PartialEq)]
+#[allow(dead_code)]
 enum CallState {
     Idle,
     Ringing,

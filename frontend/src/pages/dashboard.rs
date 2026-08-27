@@ -13,7 +13,7 @@ pub fn DashboardPage() -> impl IntoView {
     let (tab, set_tab) = signal(0u8); // 0=for you, 1=following
 
     let user = store::get_user();
-    let username = user.as_ref().map(|u| u.username.clone()).unwrap_or_else(|| "user".into());
+    let _username = user.as_ref().map(|u| u.username.clone()).unwrap_or_else(|| "user".into());
 
     spawn_local(async move {
         if let Ok(val) = api::get::<serde_json::Value>("/moments").await {

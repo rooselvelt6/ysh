@@ -196,9 +196,11 @@ pub struct ConnectionManager {
 
 #[derive(Debug, Clone)]
 pub struct CallState {
+    #[allow(dead_code)]
     pub call_id: String,
     pub caller_id: i64,
     pub callee_id: i64,
+    #[allow(dead_code)]
     pub call_type: String,
     pub status: String,
     pub started_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -303,6 +305,7 @@ impl ConnectionManager {
         None
     }
 
+    #[allow(dead_code)]
     pub fn find_call_by_user(&self, user_id: i64) -> Option<String> {
         for (id, call) in &self.active_calls {
             if call.caller_id == user_id || call.callee_id == user_id {
