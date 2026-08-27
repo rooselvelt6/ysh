@@ -22,6 +22,8 @@ pub struct YshConfig {
     pub integrity: IntegrityConfig,
     #[serde(default)]
     pub db_encryption: DbEncryptionConfig,
+    #[serde(default = "default_ai")]
+    pub ai: AiConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -303,5 +305,50 @@ impl Default for DbEncryptionConfig {
             key_file: "./db_keyfile".into(),
             algorithm: default_db_enc_algorithm(),
         }
+    }
+}
+
+// ═══════════════════════════════════════════
+// AI ENGINE CONFIG
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiConfig {
+    pub enabled: bool,
+    pub text_moderation_sensitivity: f64,
+    pub text_moderation_flag_threshold: f64,
+    pub anomaly_flag_threshold: f64,
+    pub anomaly_std_devs: f64,
+    pub matching_score_scale: f64,
+    pub neural_input_size: usize,
+    pub neural_hidden_size: usize,
+    pub genetic_population_size: usize,
+    pub genetic_generations: usize,
+    pub genetic_mutation_rate: f64,
+    pub annealing_start_temp: f64,
+    pub annealing_cooling_factor: f64,
+    pub annealing_iterations: usize,
+    pub annealing_step_size: f64,
+    pub auto_report_on_block: bool,
+}
+
+pub fn default_ai() -> AiConfig {
+    AiConfig {
+        enabled: true,
+        text_moderation_sensitivity: 0.6,
+        text_moderation_flag_threshold: 0.45,
+        anomaly_flag_threshold: 0.7,
+        anomaly_std_devs: 3.0,
+        matching_score_scale: 1.0,
+        neural_input_size: 4,
+        neural_hidden_size: 8,
+        genetic_population_size: 50,
+        genetic_generations: 30,
+        genetic_mutation_rate: 0.1,
+        annealing_start_temp: 10.0,
+        annealing_cooling_factor: 0.995,
+        annealing_iterations: 1000,
+        annealing_step_size: 0.2,
+        auto_report_on_block: true,
     }
 }

@@ -53,6 +53,12 @@ struct RawConfig {
     integrity: super::settings::IntegrityConfig,
     #[serde(default)]
     db_encryption: super::settings::DbEncryptionConfig,
+    #[serde(default = "default_ai")]
+    ai: super::settings::AiConfig,
+}
+
+fn default_ai() -> super::settings::AiConfig {
+    super::settings::default_ai()
 }
 
 #[derive(Deserialize)]
@@ -182,6 +188,7 @@ impl RawConfig {
             backup: self.backup,
             integrity: self.integrity,
             db_encryption: self.db_encryption,
+            ai: self.ai,
         })
     }
 }

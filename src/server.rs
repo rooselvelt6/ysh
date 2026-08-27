@@ -12,8 +12,10 @@ use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::timeout::TimeoutLayer;
 
+use crate::actors::ai_actor::AIActorMsg;
 use crate::actors::notification_actor::NotificationMsg;
 use crate::actors::session_supervisor::SessionSupervisorMsg;
+use crate::ai::AIEngine;
 use crate::cache::{Cache, RateLimitCache, SessionCache};
 use crate::config::YshConfig;
 use crate::db::Database;
@@ -37,6 +39,8 @@ pub struct AppState {
     pub encrypted_key: EncryptedKey,
     pub session_actor: ractor::ActorRef<SessionSupervisorMsg>,
     pub notification_actor: ractor::ActorRef<NotificationMsg>,
+    pub ai_actor: ractor::ActorRef<AIActorMsg>,
+    pub ai_engine: std::sync::Arc<AIEngine>,
     pub circuit_breaker: CircuitBreaker,
     pub ws_connections: Arc<tokio::sync::Mutex<ConnectionManager>>,
     pub read_receipts: Arc<tokio::sync::Mutex<std::collections::HashMap<(i64, i64), i64>>>,
@@ -350,6 +354,38 @@ pub fn build_router(state: AppState) -> Router {
 
     let config_routes = Router::new().route("/config", get(get_config));
 
+    let ai_routes = Router::new()
+        .route(
+            "/ai/moderation/text",
+            post(crate::api::ai::moderate_text),
+        )
+        .route(
+            "/ai/anomaly/score",
+            post(crate::api::ai::anomaly_score),
+        )
+        .route(
+            "/ai/anomaly/detector",
+            post(crate::api::ai::anomaly_detector_demo),
+        )
+        .route("/ai/matching/score", post(crate::api::ai::match_score))
+        .route(
+            "/ai/matching/vectorize",
+            post(crate::api::ai::match_vectorize),
+        )
+        .route(
+            "/ai/neural/predict",
+            post(crate::api::ai::neural_predict),
+        )
+        .route(
+            "/ai/neural/train",
+            post(crate::api::ai::neural_train),
+        )
+        .route(
+            "/ai/optimize/genetic",
+            post(crate::api::ai::optimize_genetic),
+        )
+        .route("/ai/stats", get(crate::api::ai::ai_stats));
+
     let api_routes = Router::new()
         .merge(auth_routes)
         .merge(crypto_routes)
@@ -371,7 +407,8 @@ pub fn build_router(state: AppState) -> Router {
         .merge(moment_routes)
         .merge(admin_routes)
         .merge(notification_routes)
-        .merge(chat_routes);
+        .merge(chat_routes)
+        .merge(ai_routes);
 
     let cors_has_wildcard = state.config.cors.allowed_origins.iter().any(|o| o == "*");
 

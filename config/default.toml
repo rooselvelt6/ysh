@@ -161,3 +161,24 @@ enabled = false
 key_env = "YSH_DB_KEY"
 key_file = "./db_keyfile"
 algorithm = "AES-256-GCM"
+
+# ═══════════════════════════════════════════
+# AI ENGINE (Motor de IA)
+# ═══════════════════════════════════════════
+[ai]
+enabled = true
+text_moderation_sensitivity = 0.6
+text_moderation_flag_threshold = 0.45
+anomaly_flag_threshold = 0.7
+anomaly_std_devs = 3.0
+matching_score_scale = 1.0
+neural_input_size = 4
+neural_hidden_size = 8
+genetic_population_size = 50
+genetic_generations = 30
+genetic_mutation_rate = 0.1
+annealing_start_temp = 10.0
+annealing_cooling_factor = 0.995
+annealing_iterations = 1000
+annealing_step_size = 0.2
+auto_report_on_block = true

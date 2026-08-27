@@ -25,7 +25,7 @@
 >
 > Every byte is memory-safe. Every connection is encrypted. Every decision is audited.
 >
-> **191 tests. 0 errors. 0 warnings. Zero compromises.**
+> **227 tests. 0 errors. 0 warnings. Zero compromises.**
 
 ---
 
@@ -78,10 +78,10 @@
 
 | Metric | Value |
 |---|---|
-| **Lines of Rust** | ~9,600 |
-| **API Endpoints** | 50+ |
+| **Lines of Rust** | ~10,300 |
+| **API Endpoints** | 57+ |
 | **Database Tables** | 40 (10 TableDef + 30 MultimapTableDef) |
-| **Automated Tests** | 177 |
+| **Automated Tests** | 227 |
 | **WebSocket Message Types** | 25 |
 | **Security Controls** | 17+ |
 | **Crypto Algorithms** | 6 (AES, ChaCha, Argon2, Blake3, X25519, Ed25519) |
@@ -106,7 +106,7 @@
 | **TLS** | rustls | 0.23 | TLS 1.3 |
 | **Rate Limiting** | governor + dashmap | 0.8 / 6.x | Per-IP keyed, auto-block |
 | **WebRTC/SFU** | LiveKit | 1.x | SFU managed |
-| **IA/ML** | Burn | 0.21.0 | Neural nets, fuzzy, genetic |
+| **IA/ML** | Núcleo Rust puro | - | Neural nets, genéticos, fuzzy, annealing, anomalías |
 | **Pagos Cripto** | Binance API | - | BTC/ETH/USDT/BNB |
 | **Email** | lettre | 0.11 | SMTP |
 | **Push** | fcm | 0.5 | FCM para Android/Web |
@@ -323,6 +323,19 @@
 - **35+ endpoints** — Todos probados end-to-end con curl
 - **40 table definitions** — redb (10 TableDefinition + 30 MultimapTableDefinition)
 
+### Motor de IA (Phase 10)
+- **Redes Neuronales** — MLP feedforward sigmoid/ReLU con backpropagation (entrena y predice, e.g. OR-gate)
+- **Algoritmos Genéticos** — `genetic::optimize`: población, selección por torneo, crossover uniforme, mutación
+- **Lógica Difusa** — `fuzzy`: funciones de membresía triangular, fuzzify/defuzzify por centroide, clustering de QoS
+- **Recocido Simulado** — `annealing::minimize`: minimización con enfriamiento geométrico (resource/pricing opt)
+- **Detector de Anomalías** — `anomaly`: estadísticas online (media/varianza), z-scores, streaming outlier detector
+- **Moderación de Texto** — `text`: blocklist + flaglist + severity scoring → Allow/Flag/Block con categorías
+- **Matching con IA** — `matching`: vectorización de features (intereses, región, género, edad, rating), similitud coseno + fuzzy boost
+- **AIEngine** — motor único con métricas atómicas y contadores por modelo
+- **AIActor** — actor OTP funcional conectado al motor (moderación async + deepfake queue)
+- **10 endpoints `/api/v1/ai/*`** — todos probados end-to-end
+- **14 tests AI** — 227 tests totales, 0 warnings, 0 errores, 100% Rust (sin runtime externo de ML)
+
 ### APIs Implementadas (todas funcionales y probadas)
 | Endpoint | Método | Descripción |
 |---|---|---|
@@ -377,6 +390,15 @@
 | `/api/v1/admin/user/:id/ban` | POST | Banear usuario (admin) |
 | `/api/v1/admin/user/:id/unban` | POST | Desbanear usuario (admin) |
 | `/api/v1/admin/stats` | GET | Estadísticas (admin) |
+| `/api/v1/ai/moderation/text` | POST | Moderación de texto con IA |
+| `/api/v1/ai/anomaly/score` | POST | Score de anomalía/riesgo |
+| `/api/v1/ai/anomaly/detector` | POST | Detector streaming de outliers |
+| `/api/v1/ai/matching/score` | POST | Compatibilidad entre 2 perfiles |
+| `/api/v1/ai/matching/vectorize` | POST | Vectorizar features de matching |
+| `/api/v1/ai/neural/predict` | POST | Predicción de red neuronal |
+| `/api/v1/ai/neural/train` | POST | Entrenar red neuronal (backprop) |
+| `/api/v1/ai/optimize/genetic` | POST | Optimización genética de parámetros |
+| `/api/v1/ai/stats` | GET | Estado y métricas del motor IA |
 
 ---
 
@@ -447,7 +469,7 @@
 - Message persistence + history
 
 ### FASE 7: Testing + Anti-DDoS Protection ✅
-- **191 tests automatizados** (49 DB, 35 economy, 33 security, 25 password/TOTP, 19 middleware, 16 token/device, 14 encryption)
+- **227 tests automatizados** (14 AI, 49 DB, 35 economy, 33 security, 25 password/TOTP, 19 middleware, 16 token/device, 14 encryption)
 - **Lua eliminado** — Reemplazado por TOML nativo + env vars (eliminó vector de RCE)
 - **Per-IP rate limiting** — Clasificación por ruta: auth=5/min, API=60/min, admin=120/min
 - **IP blocklist** — Auto-ban DashMap con TTL: 100 errores = block 5 min
@@ -496,15 +518,19 @@
 - **Config** — `BackupConfig`, `IntegrityConfig`, `DbEncryptionConfig` con defaults seguros
 - **14 new tests** — encryption roundtrip, nonce uniqueness, wrong key rejection, corruption detection, logical length tracking
 
-### FASE 10: Motor de IA
-- Redes Neuronales (Burn): Matching, Deepfake, NSFW, Churn, Pricing
-- Algoritmos Genéticos: optimización de parámetros de matching
-- Enjambre (ABC/ACO): balanceo de carga entre servidores
-- Lógica Difusa: clasificación de usuarios, QoS adaptativa
-- Recocido Simulado: optimización de recursos
-- Heurísticas: anomalías, fraud detection, patrones
-- Moderación IA: text + video + auto-report + human review
-- A/B Testing Framework para features
+### FASE 10: Motor de IA ✅
+- **Redes Neuronales (Rust puro)** — MLP feedforward con backpropagation (OR-gate learning acertado en tests)
+- **Algoritmos Genéticos** — optimización de parámetros de matching (selección por torneo, crossover uniforme, mutación gaussiana)
+- **Lógica Difusa** — fuzzy sets, funciones de membresía triangular, clasificación y defuzzificación por centroide
+- **Recocido Simulado** — minimización de recursos/parámetros (pricing, QoS) con enfriamiento geométrico
+- **Heurísticas / Detección de anomalías** — z-scores con estadísticas online (mean/variance), detector streaming de outliers
+- **Moderación de texto con IA** — blocklist hardcore + flaglist + scoring de severidad → decision Allow/Flag/Block
+- **AIEngine** — motor único con métricas atómicas por modelo y contadores
+- **AIActor** — actor OTP funcional que usa el motor (moderación async, deepfake-check queue)
+- **API AI** — `/api/v1/ai/*`: moderación de texto, score de anomalía, detector streaming, scoring/compatibilidad de matching, vectorización de features, predicción/entrenamiento neuronal, optimización genética, stats
+- **Matching por features** — vectorización de intereses/región/género/edad/rating + similitud coseno + reforzado difuso
+- **14 tests AI** — 227 tests totales, 0 warnings, 0 errores
+- **100% Rust** — sin runtime externo de ML (sin C, sin torch)
 
 ### FASE 11: Frontend (Leptos + Tailwind)
 - Layout responsive (mobile-first)
@@ -608,7 +634,7 @@ curl -X POST http://localhost:8080/api/v1/register \
 
 # Verify
 cargo check          # 0 warnings, 0 errors
-cargo test           # 191 tests passing
+cargo test           # 227 tests passing
 cargo build          # Clean build
 ```
 

@@ -1,4 +1,5 @@
 mod actors;
+mod ai;
 mod api;
 mod auth;
 mod cache;
@@ -100,6 +101,10 @@ async fn main() -> Result<()> {
     let ddos_protection = DdosProtection::new(Arc::new(ddos_cfg.clone()), ip_blocklist.clone());
     tracing::info!("DDoS protection enabled (body limit: {} bytes, timeout: {}s)", ddos_cfg.max_body_bytes, ddos_cfg.request_timeout_secs);
 
+    let ai_engine = std::sync::Arc::new(crate::ai::AIEngine::new(
+        ysh_config.ai.clone(),
+    ));
+
     tracing::info!("Starting actors...");
     let (supervisor, _supervisor_handle) = ractor::Actor::spawn(
         Some("supervisor-tree".to_string()),
@@ -157,7 +162,7 @@ async fn main() -> Result<()> {
     let (ai_actor, _ai_handle) = ractor::Actor::spawn(
         Some("ai-actor".to_string()),
         actors::ai_actor::AIActor,
-        (),
+        ai_engine.clone(),
     )
     .await?;
 
@@ -209,6 +214,7 @@ async fn main() -> Result<()> {
     let _ = ai_actor.send_message(actors::ai_actor::AIActorMsg::LoadModel);
     let _ = ai_actor.send_message(actors::ai_actor::AIActorMsg::Moderate {
         content_id: "startup-check".to_string(),
+        content: Some("system startup probe".to_string()),
     });
     let _ = ai_actor.send_message(actors::ai_actor::AIActorMsg::DeepfakeCheck {
         user_id: "system".to_string(),
@@ -280,6 +286,8 @@ async fn main() -> Result<()> {
         encrypted_key,
         session_actor,
         notification_actor,
+        ai_actor,
+        ai_engine,
         circuit_breaker,
         ws_connections,
         read_receipts,
