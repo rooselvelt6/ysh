@@ -1,0 +1,15 @@
+pub mod login;
+pub mod register;
+pub mod two_factor;
+pub mod forgot_password;
+pub mod dashboard;
+pub mod discover;
+pub mod wallet;
+pub mod profile;
+pub mod moments;
+pub mod gifts;
+pub mod hosts;
+pub mod agency;
+pub mod chat;
+pub mod notifications;
+pub mod stream;

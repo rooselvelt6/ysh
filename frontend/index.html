@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>YSH — Social Streaming Platform</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div id="app"></div>
+    <script>window.__YSH_API__ = 'http://localhost:3000';</script>
+    <script type="module">
+        import init, { main } from './pkg/ysh_frontend.js';
+        await init();
+        main();
+    </script>
+</body>
+</html>
