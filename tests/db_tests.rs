@@ -1,5 +1,6 @@
 fn test_db() -> ysh::db::Database {
-    ysh::db::Database::new(":memory:").unwrap()
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    ysh::db::Database::new(tmp.path().to_str().unwrap()).unwrap()
 }
 
 fn create_test_user(db: &ysh::db::Database, name: &str) -> i64 {
@@ -135,7 +136,7 @@ mod totp_2fa_tests {
         let stored = db.get_recovery_codes(id).unwrap();
         assert_eq!(stored.len(), 3);
 
-        db.mark_recovery_code_used(stored[0].id).unwrap();
+        db.mark_recovery_code_used(id, stored[0].id).unwrap();
         let stored = db.get_recovery_codes(id).unwrap();
         assert!(stored[0].used);
         assert!(!stored[1].used);

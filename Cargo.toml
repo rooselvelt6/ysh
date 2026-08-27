@@ -88,9 +88,9 @@ base64 = "0.22"
 futures = "0.3"
 
 # ═══════════════════════════════════════════
-# DATABASE
+# DATABASE (100% Rust — no C bundled)
 # ═══════════════════════════════════════════
-rusqlite = { version = "0.40", features = ["bundled"] }
+redb = "2"
 
 # ═══════════════════════════════════════════
 # CACHE (embedded key-value store)
@@ -111,3 +111,4 @@ tokio-tungstenite = "0.26"
 # TEST
 # ═══════════════════════════════════════════
 [dev-dependencies]
+tempfile = "3"

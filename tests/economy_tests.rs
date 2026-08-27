@@ -2,7 +2,9 @@ use std::sync::Arc;
 use ysh::db::Database;
 
 fn setup_db() -> Arc<Database> {
-    let db = Database::new(":memory:").expect("Failed to create test DB");
+    let tmp = tempfile::NamedTempFile::new().expect("Failed to create temp file");
+    let db = Database::new(tmp.path().to_str().unwrap()).expect("Failed to create test DB");
+    std::mem::forget(tmp);
     Arc::new(db)
 }
 

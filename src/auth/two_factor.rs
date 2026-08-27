@@ -226,7 +226,7 @@ pub async fn verify_recovery(
         if !rc.used && totp::verify_recovery_code(code, &rc.code_hash) {
             state
                 .db
-                .mark_recovery_code_used(rc.id)
+                .mark_recovery_code_used(user.id, rc.id)
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
             let access_token = crate::security::token::create_token(
