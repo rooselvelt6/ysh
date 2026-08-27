@@ -447,7 +447,7 @@
 - Message persistence + history
 
 ### FASE 7: Testing + Anti-DDoS Protection ✅
-- **177 tests automatizados** (55 DB, 40 security, 30 password/TOTP, 30 middleware, 22 token/device)
+- **177 tests automatizados** (49 DB, 35 economy, 33 security, 25 password/TOTP, 19 middleware, 16 token/device)
 - **Lua eliminado** — Reemplazado por TOML nativo + env vars (eliminó vector de RCE)
 - **Per-IP rate limiting** — Clasificación por ruta: auth=5/min, API=60/min, admin=120/min
 - **IP blocklist** — Auto-ban DashMap con TTL: 100 errores = block 5 min
