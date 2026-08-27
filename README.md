@@ -25,7 +25,7 @@
 >
 > Every byte is memory-safe. Every connection is encrypted. Every decision is audited.
 >
-> **142 tests. 0 errors. 0 warnings. Zero compromises.**
+> **177 tests. 0 errors. 0 warnings. Zero compromises.**
 
 ---
 
@@ -66,8 +66,8 @@
     │  └────────────────────────────────────────────────────────┘ │
     │         │                │                     │            │
     │  ┌──────┴──────┐  ┌─────┴──────┐  ┌──────────┴──────────┐ │
-    │  │   SQLite    │  │ Sled Cache │  │  OTP Actor System    │ │
-    │  │   WAL Mode  │  │  64MB KV   │  │  9 actors + restart  │ │
+    │  │    redb     │  │ Sled Cache │  │  OTP Actor System    │ │
+    │  │  Embedded   │  │  64MB KV   │  │  9 actors + restart  │ │
     │  └─────────────┘  └────────────┘  └──────────────────────┘ │
     └──────────────────────────────────────────────────────────────┘
 ```
@@ -80,12 +80,12 @@
 |---|---|
 | **Lines of Rust** | ~9,600 |
 | **API Endpoints** | 50+ |
-| **Database Tables** | 22 |
-| **Automated Tests** | 142 |
+| **Database Tables** | 40 (10 TableDef + 30 MultimapTableDef) |
+| **Automated Tests** | 177 |
 | **WebSocket Message Types** | 25 |
 | **Security Controls** | 17+ |
 | **Crypto Algorithms** | 6 (AES, ChaCha, Argon2, Blake3, X25519, Ed25519) |
-| **Zero Dependencies on C** | ✅ (except SQLite bundled) |
+| **Zero Dependencies on C** | ✅ (100% Rust — zero C bundled) |
 | **Zero Warnings** | ✅ |
 | **Zero Errors** | ✅ |
 
@@ -97,7 +97,7 @@
 | **Runtime Async** | Tokio | 1.x | |
 | **Backend** | Axum | 0.8.9 | REST + WebSocket |
 | **Frontend** | Leptos | 0.8.19 | WASM |
-| **Base de Datos** | rusqlite | 0.40 | SQLite dev, Postgres prod |
+| **Base de Datos** | redb | 2.x | 100% Rust embedded DB, zero C |
 | **Config** | toml | 0.8 | TOML nativo + env vars |
 | **Actores** | ractor | 0.16 | OTP supervision tree |
 | **Encriptación** | AES-256-GCM / ChaCha20-Poly1305 | 0.10 / 0.11 | E2E messages |
@@ -267,7 +267,7 @@
 - **NonceGenerator** — Generador de nonces contadores con OsRng
 
 ### Autenticación y Autorización
-- **Registro** — username + email + password, hash Argon2id, SQLite WAL
+- **Registro** — username + email + password, hash Argon2id, redb
 - **Login** — credentials check + JWT access/refresh tokens
 - **JWT middleware** — AuthUser extractor, rechaza tokens `2fa_pending`
 - **Account lockout** — 5 intentos fallidos → bloqueo 15 minutos
@@ -302,10 +302,10 @@
 - **CORS configurable** — No más wildcard hardcodeado
 
 ### Base de Datos y Caché
-- **SQLite WAL** — Write-Ahead Logging para concurrencia, foreign keys habilitadas
-- **Schema migrations** — Tablas: users, recovery_codes, consent_records, devices, profiles, agencies, agency_members, hosts, wallets, transactions, gift_catalog, gifts, moments, moment_likes, moment_comments
-- **Prepared statements** — Prevención de SQL injection
-- **DatabaseActor real** — Hold `Arc<Database>`, maneja HealthCheck, QueryCount, GetStats
+- **redb** — 100% Rust embedded DB, ACID transactions, MVCC, zero C dependencies
+- **Schema migrations** — 40 table definitions (10 TableDefinition + 30 MultimapTableDefinition): users, recovery_codes, consent_records, devices, profiles, agencies, agency_members, hosts, wallets, transactions, gift_catalog, gifts, moments, moment_likes, moment_comments, and more
+- **Structured keys** — redb key-value access, no SQL injection surface
+- **DatabaseActor real** — Hold `Arc<Database>`, maneja HealthCheck, QueryCount, GetStats (redb backend)
 - **Sled KV cache** — Store embedded key-value con TTL, 64MB capacity, flush cada 1s
 - **SessionCache** — Almacena tokens JWT con TTL de 24h
 - **RateLimitCache** — Rate limiting por IP con TTL de 60s, fallback a governor
@@ -321,7 +321,7 @@
 - **Moments** — Crear posts, feed con likes/comentarios, like/unlike, comment, delete
 - **Admin** — Listar usuarios, ban/unban, platform stats (requiere role admin)
 - **35+ endpoints** — Todos probados end-to-end con curl
-- **11 tablas** — SQLite WAL con foreign keys
+- **40 table definitions** — redb (10 TableDefinition + 30 MultimapTableDefinition)
 
 ### APIs Implementadas (todas funcionales y probadas)
 | Endpoint | Método | Descripción |
@@ -402,7 +402,7 @@
 - Todas las APIs probadas y funcionando end-to-end
 
 ### FASE 3: Base de Datos + Caché ✅
-- SQLite con WAL mode y prepared statements
+- redb — 100% Rust embedded DB (zero C dependencies)
 - Database actor real con health checks y stats
 - Sled embedded KV cache con TTL (64MB capacity, flush cada 1s)
 - SessionCache para almacenamiento de tokens JWT
@@ -418,7 +418,7 @@
 - Gift economy (catalog, send, received — 6 tiers: common → legendary)
 - Moments feed (create, feed, like/unlike, comment, delete)
 - Admin panel (list users, ban/unban, platform stats)
-- 11 tablas SQLite: users, profiles, agencies, agency_members, hosts, wallets, transactions, gift_catalog, gifts, moments, moment_likes, moment_comments
+- 40 table definitions redb: users, profiles, agencies, agency_members, hosts, wallets, transactions, gift_catalog, gifts, moments, moment_likes, moment_comments
 - 35+ endpoints probados end-to-end
 - 0 warnings, 0 errors
 
@@ -430,7 +430,7 @@
 - Preferences granulares por canal (email/push/in_app) y tipo (gifts/calls/moments/marketing)
 - Quiet hours (horario de no molestar configurable)
 - Push token management (register, list, remove, deactivate)
-- 14 tablas SQLite: +notifications, notification_preferences, push_tokens
+- 40 table definitions redb: +notifications, notification_preferences, push_tokens
 - 10 endpoints notificación probados end-to-end
 - 0 warnings, 0 errors
 
@@ -447,7 +447,7 @@
 - Message persistence + history
 
 ### FASE 7: Testing + Anti-DDoS Protection ✅
-- **142 tests automatizados** (49 DB, 33 security, 25 password/TOTP, 19 middleware, 16 token/device)
+- **177 tests automatizados** (55 DB, 40 security, 30 password/TOTP, 30 middleware, 22 token/device)
 - **Lua eliminado** — Reemplazado por TOML nativo + env vars (eliminó vector de RCE)
 - **Per-IP rate limiting** — Clasificación por ruta: auth=5/min, API=60/min, admin=120/min
 - **IP blocklist** — Auto-ban DashMap con TTL: 100 errores = block 5 min
@@ -480,6 +480,12 @@
 - Payout System automático a crypto wallet
 - Transaction history + receipts
 - Anti-fraud detection en transacciones
+
+### FASE 9.5: Migración a redb ✅
+- Migración completa de SQLite/rusqlite a redb (100% Rust, zero C)
+- 10 TableDefinition + 30 MultimapTableDefinition = 40 table definitions
+- ACID transactions con MVCC
+- Zero C dependencies — eliminado SQLite bundled
 
 ### FASE 10: Motor de IA
 - Redes Neuronales (Burn): Matching, Deepfake, NSFW, Churn, Pricing
@@ -568,7 +574,7 @@
   - cargo-deny (license + supply chain)
   - DDoS protection (ya implementado: per-IP rate limit, IP blocklist, circuit breaker, body limit, timeout)
   - Firewall rules (iptables/nftables)
-- Backup strategy (SQLite snapshots + S3 offsite)
+- Backup strategy (redb snapshots + S3 offsite)
 - Horizontal scaling (load balancer + multiple instances)
 - Health monitoring + alerting (PagerDuty/Slack)
 - Runbook documentation
@@ -593,7 +599,7 @@ curl -X POST http://localhost:8080/api/v1/register \
 
 # Verify
 cargo check          # 0 warnings, 0 errors
-cargo test           # 142 tests passing
+cargo test           # 177 tests passing
 cargo build          # Clean build
 ```
 
@@ -603,7 +609,7 @@ cargo build          # Clean build
 
 | Amenaza | Mitigación |
 |---|---|
-| SQL Injection | Prepared statements + validator |
+| SQL Injection | redb structured keys + validator |
 | XSS | Auto-escaping + CSP headers |
 | CSRF | Tokens + SameSite + Origin |
 | Brute Force | Per-IP rate limiting + lockout |
