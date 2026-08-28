@@ -503,7 +503,7 @@
 - 4 tablas redb nuevas (`T_CALL`, `MM_CALL_USER`, `MM_CALL_QUALITY`, `MM_CALL_RECORDING`), pago wallet al finalizar
 - 16 tests webrtc — 293 tests totales, 0 warnings, 0 errores
 
-### FASE 9: Economía + Pagos Cripto
+### FASE 9: Economía + Pagos Cripto ✅
 - YSH Coins (compra, earn, gasto, staking)
 - Gift Economy con rarity + NFTs
 - Flash Call Economy (hosts ganan por llamadas)
@@ -512,6 +512,8 @@
 - Payout System automático a crypto wallet
 - Transaction history + receipts
 - Anti-fraud detection en transacciones
+- Módulos: `wallet`, `gift`, `staking`, `commission`, `payout`, `receipt`, `host` + call billing (70/30 host/platform) con débito wallet al finalizar
+- 35 tests economía — 293 tests totales, 0 warnings, 0 errores
 
 ### FASE 9.5: Migración a redb ✅
 - Migración completa de SQLite/rusqlite a redb (100% Rust, zero C)
@@ -542,7 +544,7 @@
 - **14 tests AI** — 227 tests totales, 0 warnings, 0 errores
 - **100% Rust** — sin runtime externo de ML (sin C, sin torch)
 
-### FASE 11: Frontend (Leptos + Tailwind)
+### FASE 11: Frontend (Leptos + Tailwind) ✅
 - Layout responsive (mobile-first)
 - Auth pages (login, register, 2FA, forgot password)
 - Discover Page (matching random con timer)
@@ -555,6 +557,9 @@
 - Componentes UI completos (Button, Modal, Toast, etc.)
 - Dark/Light mode
 - PWA + offline support (service worker)
+- **Leptos 0.8 CSR** compilado a WASM con `wasm-pack` (crate `ysh-frontend`), routing con `leptos_router`
+- Páginas: stream (WebRTC video/live + screen), discover, moments, wallet, gifts, agency, chat, hosts, notifications, profile, auth
+- **PWA installable** — `manifest.webmanifest` + service worker (`sw.js`): app shell precacheado, navegación network-first con fallback offline, assets cache-first, iconos SVG
 
 ### FASE 12: Internationalization (i18n) ✅
 - **Fluent (fluent-rs) integrado** — bundles compilados on-demand, fallback chain

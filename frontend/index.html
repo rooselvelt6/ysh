@@ -3,8 +3,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#000000">
+    <meta name="description" content="YSH — Plataforma social de streaming en vivo escrita 100% en Rust">
     <title>YSH — Social Streaming Platform</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icon-192.svg">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -14,6 +20,15 @@
         import init, { main } from './pkg/ysh_frontend.js';
         await init();
         main();
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/sw.js').catch(function (err) {
+                    console.error('YSH SW registration failed:', err);
+                });
+            });
+        }
     </script>
 </body>
 </html>
