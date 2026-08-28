@@ -59,6 +59,12 @@ struct RawConfig {
     moderation: super::settings::ModerationConfig,
     #[serde(default = "default_trust")]
     trust: super::settings::TrustConfig,
+    #[serde(default = "default_webrtc")]
+    webrtc: super::settings::WebRtcConfig,
+}
+
+fn default_webrtc() -> super::settings::WebRtcConfig {
+    super::settings::default_webrtc()
 }
 
 fn default_moderation() -> super::settings::ModerationConfig {
@@ -203,6 +209,7 @@ impl RawConfig {
             ai: self.ai,
             moderation: self.moderation,
             trust: self.trust,
+            webrtc: self.webrtc,
         })
     }
 }

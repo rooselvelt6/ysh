@@ -25,6 +25,7 @@ use crate::middleware::ip_blocklist::IpBlocklist;
 use crate::middleware::rate_limit::PerIpRateLimiter;
 use crate::middleware::ws_guard::WsGuard;
 use crate::security::zeroize::{EncryptedKey, SecureBuffer, SecureString};
+use crate::webrtc::RoomManager;
 use crate::ws::{ConnectionManager, MatchEvent, WsAuthQuery};
 
 #[derive(Clone)]
@@ -45,6 +46,8 @@ pub struct AppState {
     pub circuit_breaker: CircuitBreaker,
     pub ws_connections: Arc<tokio::sync::Mutex<ConnectionManager>>,
     pub read_receipts: Arc<tokio::sync::Mutex<std::collections::HashMap<(i64, i64), i64>>>,
+    pub webrtc_actor: ractor::ActorRef<crate::actors::webrtc_actor::WebRTCActorMsg>,
+    pub webrtc_rooms: Arc<tokio::sync::Mutex<RoomManager>>,
     pub match_tx: tokio::sync::mpsc::UnboundedSender<MatchEvent>,
     pub ip_blocklist: Arc<IpBlocklist>,
     pub per_ip_limiter: Arc<PerIpRateLimiter>,
@@ -365,6 +368,25 @@ pub fn build_router(state: AppState) -> Router {
             get(crate::api::moderation::moderation_stats),
         );
 
+    let webrtc_routes = Router::new()
+        .route("/call/start", post(crate::api::webrtc::start_call))
+        .route("/call/{call_id}/join", post(crate::api::webrtc::join_call))
+        .route("/call/{call_id}/leave", post(crate::api::webrtc::leave_call))
+        .route("/call/{call_id}/end", post(crate::api::webrtc::end_call))
+        .route("/call/{call_id}/screen-share", post(crate::api::webrtc::toggle_screen_share))
+        .route("/call/{call_id}/recording/start", post(crate::api::webrtc::start_recording))
+        .route("/call/{call_id}/recording/stop", post(crate::api::webrtc::stop_recording))
+        .route("/call/{call_id}/quality", post(crate::api::webrtc::report_quality))
+        .route("/call/{call_id}/quality", get(crate::api::webrtc::call_quality))
+        .route("/call/{call_id}", get(crate::api::webrtc::get_call))
+        .route("/call/{call_id}/peers", get(crate::api::webrtc::room_peers))
+        .route("/call/{call_id}/title", post(crate::api::webrtc::update_live_title))
+        .route("/calls/history", get(crate::api::webrtc::call_history))
+        .route("/calls/live", get(crate::api::webrtc::live_streams))
+        .route("/calls/rooms", get(crate::api::webrtc::active_rooms))
+        .route("/calls/stats", get(crate::api::webrtc::call_stats))
+        .route("/webrtc/stats", get(crate::api::webrtc::webrtc_stats));
+
     let notification_routes = Router::new()
         .route(
             "/notifications",
@@ -502,6 +524,7 @@ pub fn build_router(state: AppState) -> Router {
         .merge(admin_routes)
         .merge(social_routes)
         .merge(moderation_routes)
+        .merge(webrtc_routes)
         .merge(notification_routes)
         .merge(chat_routes)
         .merge(ai_routes)

@@ -70,6 +70,12 @@ const MM_MOD_QUEUE: MultimapTableDefinition<&str, &str> = MultimapTableDefinitio
 const MM_APPEAL: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("appeals");
 const MM_SHADOW: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("shadow_bans");
 
+// Phase 8: WebRTC + Streaming tables
+const T_CALL: TableDefinition<&str, &str> = TableDefinition::new("calls");
+const MM_CALL_USER: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("mm_call_user");
+const MM_CALL_QUALITY: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("call_quality");
+const MM_CALL_RECORDING: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("call_recordings");
+
 // ═══════════════════════════════════════════
 // DATA STRUCTS (serde)
 // ═══════════════════════════════════════════
@@ -233,6 +239,8 @@ pub struct CallBilling {
     pub host_earnings: i64,
     pub platform_fee: i64,
     pub status: String,
+    #[serde(default)]
+    pub paid: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -412,6 +420,53 @@ pub struct ReputationSummary {
 }
 
 // ═══════════════════════════════════════════
+// PHASE 8: WEBRTC + STREAMING STRUCTS
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallRecord {
+    pub call_id: String,
+    pub room_id: String,
+    pub host_id: i64,
+    pub call_type: String,       // p2p | flash | duo | group | live
+    pub participants: Vec<i64>,
+    pub status: String,          // ringing | active | ended
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub duration_secs: i64,
+    pub screen_share: bool,
+    pub screen_share_user: Option<i64>,
+    pub recording: bool,
+    #[serde(default)]
+    pub recording_encrypted: bool,
+    pub billed: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualitySample {
+    pub call_id: String,
+    pub user_id: i64,
+    pub ts: String,
+    pub bitrate_kbps: f64,
+    pub packet_loss_pct: f64,
+    pub rtt_ms: f64,
+    pub resolution: String,
+    pub simulcast_tier: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallRecording {
+    pub call_id: String,
+    pub segment_id: i64,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub storage_key: String,   // encrypted reference to the recording blob
+    pub size_bytes: i64,
+    pub encrypted: bool,
+    pub status: String,        // recording | finalized
+}
+
+// ═══════════════════════════════════════════
 // INTEGRITY TYPES
 // ═══════════════════════════════════════════
 
@@ -494,11 +549,11 @@ impl Database {
     fn init_tables(&self) -> Result<()> {
         let txn = self.inner.begin_write()?;
         // KV tables
-        for t in [T_USER, T_WALLET, T_PROFILE, T_HOST, T_AGENCY, T_CHAT_SESSION, T_NOTIF_PREF, T_STAKE, T_SPENDING, T_COUNTER, T_I18N, IX_USER_BY_USERNAME, IX_USER_BY_EMAIL, IX_REFERRAL_CODE, T_TRUST, T_REPUTATION] {
+        for t in [T_USER, T_WALLET, T_PROFILE, T_HOST, T_AGENCY, T_CHAT_SESSION, T_NOTIF_PREF, T_STAKE, T_SPENDING, T_COUNTER, T_I18N, IX_USER_BY_USERNAME, IX_USER_BY_EMAIL, IX_REFERRAL_CODE, T_TRUST, T_REPUTATION, T_CALL] {
             txn.open_table(t)?;
         }
         // Multimap tables
-        for t in [MM_RECOVERY, MM_CONSENT, MM_DEVICE, MM_AGENCY_MEMBER, MM_TRANSACTION, MM_GIFT, MM_MOMENT, MM_MOMENT_LIKE, MM_MOMENT_COMMENT, MM_NOTIFICATION, MM_PUSH_TOKEN, MM_MSG, MM_CHAT_PARTICIPANT, MM_MATCH_QUEUE, MM_STAKING, MM_REFERRAL, MM_CALL_BILLING, MM_COMMISSION, MM_PAYOUT, MM_FRAUD, MM_RECEIPT, MM_NFT, MM_GIFT_CATALOG, IX_TX_USER, IX_GIFT_FROM, IX_GIFT_TO, IX_NOTIF_USER, IX_MSG_SESSION, IX_CHAT_USER, IX_NFT_USER, MM_BLOCK, MM_REPORT, MM_BADGE, MM_RATING, MM_CONTENT_FLAG, MM_MOD_QUEUE, MM_APPEAL, MM_SHADOW] {
+        for t in [MM_RECOVERY, MM_CONSENT, MM_DEVICE, MM_AGENCY_MEMBER, MM_TRANSACTION, MM_GIFT, MM_MOMENT, MM_MOMENT_LIKE, MM_MOMENT_COMMENT, MM_NOTIFICATION, MM_PUSH_TOKEN, MM_MSG, MM_CHAT_PARTICIPANT, MM_MATCH_QUEUE, MM_STAKING, MM_REFERRAL, MM_CALL_BILLING, MM_COMMISSION, MM_PAYOUT, MM_FRAUD, MM_RECEIPT, MM_NFT, MM_GIFT_CATALOG, IX_TX_USER, IX_GIFT_FROM, IX_GIFT_TO, IX_NOTIF_USER, IX_MSG_SESSION, IX_CHAT_USER, IX_NFT_USER, MM_BLOCK, MM_REPORT, MM_BADGE, MM_RATING, MM_CONTENT_FLAG, MM_MOD_QUEUE, MM_APPEAL, MM_SHADOW, MM_CALL_USER, MM_CALL_QUALITY, MM_CALL_RECORDING] {
             txn.open_multimap_table(t)?;
         }
         txn.commit()?;
@@ -1933,7 +1988,7 @@ impl Database {
 
     pub fn start_call_billing(&self, caller_id: i64, host_id: i64, call_type: &str, cost_per_min: i64) -> Result<i64> {
         let id = self.next_seq("call_billing");
-        let cb = CallBilling { id, caller_id, host_id, call_type: call_type.into(), started_at: now(), ended_at: None, duration_secs: 0, cost_per_min, total_cost: 0, host_earnings: 0, platform_fee: 0, status: "active".into() };
+        let cb = CallBilling { id, caller_id, host_id, call_type: call_type.into(), started_at: now(), ended_at: None, duration_secs: 0, cost_per_min, total_cost: 0, host_earnings: 0, platform_fee: 0, status: "active".into(), paid: false };
         self.mm_add(MM_CALL_BILLING, &host_id.to_string(), &to_json(&cb))?;
         Ok(id)
     }
@@ -1975,6 +2030,292 @@ impl Database {
         let total_earnings = calls.iter().filter(|c| c.status == "completed").map(|c| c.host_earnings).sum::<i64>();
         let total_duration = calls.iter().filter(|c| c.status == "completed").map(|c| c.duration_secs).sum::<i64>();
         Ok(serde_json::json!({"total_calls": total_calls, "total_earnings": total_earnings, "total_duration_secs": total_duration}))
+    }
+
+    pub fn finalize_call_payment(&self, call_id: i64) -> Result<serde_json::Value> {
+        let entries = self.mm_get_all_entries(MM_CALL_BILLING)?;
+        for (host_key, val) in &entries {
+            if let Ok(mut cb) = serde_json::from_str::<CallBilling>(val) {
+                if cb.id == call_id && cb.status == "completed" && !cb.paid {
+                    let balance = self.withdraw(cb.caller_id, cb.total_cost, &format!("Call #{}", call_id))?;
+                    self.deposit(cb.host_id, cb.host_earnings, &format!("Call #{} earnings", call_id))?;
+                    cb.paid = true;
+                    self.mm_remove_all(MM_CALL_BILLING, host_key)?;
+                    self.mm_add(MM_CALL_BILLING, host_key, &to_json(&cb))?;
+                    return Ok(serde_json::json!({
+                        "call_id": call_id,
+                        "caller_balance": balance,
+                        "total_cost": cb.total_cost,
+                        "host_earnings": cb.host_earnings,
+                        "platform_fee": cb.platform_fee,
+                    }));
+                }
+            }
+        }
+        anyhow::bail!("No completed unpaid billing found for call {}", call_id)
+    }
+
+    pub fn find_active_call_billing(&self, caller_id: i64) -> Result<Option<CallBilling>> {
+        let entries = self.mm_get_all_entries(MM_CALL_BILLING)?;
+        for (_host_key, val) in &entries {
+            if let Ok(cb) = serde_json::from_str::<CallBilling>(val) {
+                if cb.caller_id == caller_id && cb.status == "in_progress" {
+                    return Ok(Some(cb));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    // ═══════════════════════════════════════════
+    // PHASE 8: WEBRTC CALL RECORDS
+    // ═══════════════════════════════════════════
+
+    pub fn create_call_record(&self, call_id: &str, room_id: &str, host_id: i64, call_type: &str, participants: &[i64]) -> Result<()> {
+        let rec = CallRecord {
+            call_id: call_id.into(),
+            room_id: room_id.into(),
+            host_id,
+            call_type: call_type.into(),
+            participants: participants.to_vec(),
+            status: "ringing".into(),
+            started_at: now(),
+            ended_at: None,
+            duration_secs: 0,
+            screen_share: false,
+            screen_share_user: None,
+            recording: false,
+            recording_encrypted: false,
+            billed: 0,
+        };
+        self.put_json(T_CALL, call_id, &rec)?;
+        self.mm_add(MM_CALL_USER, &host_id.to_string(), call_id)?;
+        for p in participants {
+            self.mm_add(MM_CALL_USER, &p.to_string(), call_id)?;
+        }
+        Ok(())
+    }
+
+    pub fn update_call_record(&self, call_id: &str, f: impl FnOnce(&mut CallRecord)) -> Result<bool> {
+        let mut rec = match self.get_json::<CallRecord>(T_CALL, call_id)? {
+            Some(r) => r,
+            None => return Ok(false),
+        };
+        f(&mut rec);
+        self.put_json(T_CALL, call_id, &rec)?;
+        Ok(true)
+    }
+
+    pub fn join_call(&self, call_id: &str, user_id: i64) -> Result<bool> {
+        self.update_call_record(call_id, |rec| {
+            if rec.status != "ended" && !rec.participants.contains(&user_id) {
+                rec.participants.push(user_id);
+                if rec.status == "ringing" {
+                    rec.status = "active".into();
+                }
+            }
+        })?;
+        self.mm_add(MM_CALL_USER, &user_id.to_string(), call_id)?;
+        Ok(true)
+    }
+
+    pub fn leave_call(&self, call_id: &str, user_id: i64) -> Result<()> {
+        self.update_call_record(call_id, |rec| rec.participants.retain(|p| *p != user_id))?;
+        Ok(())
+    }
+
+    pub fn set_call_screen_share(&self, call_id: &str, user_id: i64, active: bool) -> Result<bool> {
+        self.update_call_record(call_id, |rec| {
+            rec.screen_share = active;
+            rec.screen_share_user = if active { Some(user_id) } else { None };
+        })
+    }
+
+    pub fn set_call_recording(&self, call_id: &str, active: bool, encrypted: bool) -> Result<bool> {
+        self.update_call_record(call_id, |rec| {
+            rec.recording = active;
+            rec.recording_encrypted = encrypted;
+        })
+    }
+
+    pub fn end_call_record(&self, call_id: &str) -> Result<i64> {
+        let mut rec = match self.get_json::<CallRecord>(T_CALL, call_id)? {
+            Some(r) => r,
+            None => anyhow::bail!("Call {} not found", call_id),
+        };
+        if rec.status == "ended" {
+            return Ok(rec.duration_secs);
+        }
+        let now_str = now();
+        let start = chrono::NaiveDateTime::parse_from_str(&rec.started_at, "%Y-%m-%dT%H:%M:%SZ").unwrap_or_default();
+        let end = chrono::NaiveDateTime::parse_from_str(&now_str, "%Y-%m-%dT%H:%M:%SZ").unwrap_or_default();
+        rec.duration_secs = (end - start).num_seconds().max(0) as i64;
+        rec.ended_at = Some(now_str);
+        rec.status = "ended".into();
+        rec.recording = false;
+        self.put_json(T_CALL, call_id, &rec)?;
+        Ok(rec.duration_secs)
+    }
+
+    pub fn get_call_record(&self, call_id: &str) -> Result<Option<CallRecord>> {
+        self.get_json::<CallRecord>(T_CALL, call_id)
+    }
+
+    pub fn get_call_history(&self, user_id: i64, limit: i64) -> Result<Vec<serde_json::Value>> {
+        let entries = self.mm_get_all(MM_CALL_USER, &user_id.to_string())?;
+        let mut recs: Vec<CallRecord> = Vec::new();
+        for call_id in entries {
+            if let Some(rec) = self.get_json::<CallRecord>(T_CALL, &call_id)? {
+                recs.push(rec);
+            }
+        }
+        recs.sort_by(|a, b| b.started_at.cmp(&a.started_at).then_with(|| b.call_id.cmp(&a.call_id)));
+        let out: Vec<serde_json::Value> = recs.into_iter().take(limit as usize).map(|r| serde_json::to_value(r).unwrap_or_default()).collect();
+        Ok(out)
+    }
+
+    pub fn get_call_stats(&self) -> Result<serde_json::Value> {
+        let txn = self.inner.begin_read()?;
+        let t = txn.open_table(T_CALL)?;
+        let mut total = 0;
+        let mut active = 0;
+        let mut duration_sum: i64 = 0;
+        for entry in t.iter()? {
+            let (_, v) = entry?;
+            total += 1;
+            if let Ok(rec) = serde_json::from_str::<CallRecord>(v.value()) {
+                if rec.status != "ended" {
+                    active += 1;
+                }
+                duration_sum += rec.duration_secs;
+            }
+        }
+        Ok(serde_json::json!({
+            "total_calls": total,
+            "active_calls": active,
+            "total_duration_secs": duration_sum,
+        }))
+    }
+
+    // ═══════════════════════════════════════════
+    // PHASE 8: QUALITY METRICS
+    // ═══════════════════════════════════════════
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_quality_sample(&self, call_id: &str, user_id: i64, bitrate_kbps: f64, packet_loss_pct: f64, rtt_ms: f64, resolution: &str, simulcast_tier: &str) -> Result<()> {
+        let sample = QualitySample {
+            call_id: call_id.into(),
+            user_id,
+            ts: now(),
+            bitrate_kbps,
+            packet_loss_pct,
+            rtt_ms,
+            resolution: resolution.into(),
+            simulcast_tier: simulcast_tier.into(),
+        };
+        self.mm_add(MM_CALL_QUALITY, call_id, &to_json(&sample))
+    }
+
+    pub fn get_quality_metrics(&self, call_id: &str) -> Result<Vec<QualitySample>> {
+        let entries = self.mm_get_all(MM_CALL_QUALITY, call_id)?;
+        Ok(entries.iter().filter_map(|s| serde_json::from_str(s).ok()).collect())
+    }
+
+    pub fn aggregate_quality(&self, call_id: &str) -> Result<serde_json::Value> {
+        let samples = self.get_quality_metrics(call_id)?;
+        if samples.is_empty() {
+            return Ok(serde_json::json!({"samples": 0}));
+        }
+        let n = samples.len() as f64;
+        let bitrate: f64 = samples.iter().map(|s| s.bitrate_kbps).sum::<f64>() / n;
+        let loss: f64 = samples.iter().map(|s| s.packet_loss_pct).sum::<f64>() / n;
+        let rtt: f64 = samples.iter().map(|s| s.rtt_ms).sum::<f64>() / n;
+        let simulcast_tiers_used: std::collections::HashSet<String> =
+            samples.iter().map(|s| s.simulcast_tier.clone()).collect();
+        Ok(serde_json::json!({
+            "samples": samples.len(),
+            "avg_bitrate_kbps": (bitrate * 10.0).round() / 10.0,
+            "avg_packet_loss_pct": (loss * 100.0).round() / 100.0,
+            "avg_rtt_ms": (rtt * 10.0).round() / 10.0,
+            "simulcast_tiers_used": simulcast_tiers_used,
+        }))
+    }
+
+    // ═══════════════════════════════════════════
+    // PHASE 8: CALL RECORDINGS (opt-in, encrypted)
+    // ═══════════════════════════════════════════
+
+    pub fn start_call_recording(&self, call_id: &str, storage_key: &str, encrypted: bool, size_bytes: i64) -> Result<i64> {
+        let segment_id = self.next_seq("call_recordings");
+        let rec = CallRecording {
+            call_id: call_id.into(),
+            segment_id,
+            started_at: now(),
+            ended_at: None,
+            storage_key: storage_key.into(),
+            size_bytes,
+            encrypted,
+            status: "recording".into(),
+        };
+        self.mm_add(MM_CALL_RECORDING, call_id, &to_json(&rec))?;
+        self.set_call_recording(call_id, true, encrypted)?;
+        Ok(segment_id)
+    }
+
+    pub fn finalize_call_recording(&self, call_id: &str, segment_id: i64) -> Result<()> {
+        let entries = self.mm_get_all(MM_CALL_RECORDING, call_id)?;
+        let mut recs: Vec<CallRecording> = entries
+            .iter()
+            .filter_map(|s| serde_json::from_str::<CallRecording>(s).ok())
+            .collect();
+        let matched = recs.iter_mut().find(|r| r.segment_id == segment_id && r.status == "recording");
+        match matched {
+            Some(rec) => {
+                rec.ended_at = Some(now());
+                rec.status = "finalized".into();
+            }
+            None => anyhow::bail!("Recording segment {} not found", segment_id),
+        }
+        self.mm_remove_all(MM_CALL_RECORDING, call_id)?;
+        for rec in &recs {
+            self.mm_add(MM_CALL_RECORDING, call_id, &to_json(rec))?;
+        }
+        // keep the call flagged as recording only while a segment is active
+        self.set_call_recording(call_id, false, false)?;
+        Ok(())
+    }
+
+    pub fn list_call_recordings(&self, call_id: &str) -> Result<Vec<CallRecording>> {
+        let entries = self.mm_get_all(MM_CALL_RECORDING, call_id)?;
+        Ok(entries.iter().filter_map(|s| serde_json::from_str(s).ok()).collect())
+    }
+
+    // Random available peer for flash calls (not self, not in an active call).
+    pub fn find_random_peer(&self, exclude_user_id: i64) -> Result<Option<i64>> {
+        let txn = self.inner.begin_read()?;
+        let t = txn.open_table(T_USER)?;
+        let mut candidates: Vec<i64> = Vec::new();
+        for entry in t.iter()? {
+            let (k, _) = entry?;
+            if let Ok(uid) = k.value().parse::<i64>()
+                && uid != exclude_user_id
+            {
+                candidates.push(uid);
+            }
+        }
+        drop(t);
+        drop(txn);
+        let busy: std::collections::HashSet<i64> = self
+            .mm_get_all_entries(MM_CALL_USER)?
+            .into_iter()
+            .filter_map(|(k, _)| k.parse::<i64>().ok())
+            .collect();
+        candidates.retain(|c| !busy.contains(c));
+        if candidates.is_empty() {
+            return Ok(None);
+        }
+        let idx = rand::rng().random_range(0usize..candidates.len());
+        Ok(Some(candidates[idx]))
     }
 
     // ═══════════════════════════════════════════

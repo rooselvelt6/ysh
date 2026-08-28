@@ -25,7 +25,7 @@
 >
 > Every byte is memory-safe. Every connection is encrypted. Every decision is audited.
 >
-> **261 tests. 0 errors. 0 warnings. Zero compromises.**
+> **293 tests. 0 errors. 0 warnings. Zero compromises.**
 
 ---
 
@@ -81,7 +81,7 @@
 | **Lines of Rust** | ~10,300 |
 | **API Endpoints** | 57+ |
 | **Database Tables** | 40 (10 TableDef + 30 MultimapTableDef) |
-| **Automated Tests** | 261 |
+| **Automated Tests** | 293 |
 | **WebSocket Message Types** | 25 |
 | **Security Controls** | 17+ |
 | **Crypto Algorithms** | 6 (AES, ChaCha, Argon2, Blake3, X25519, Ed25519) |
@@ -488,8 +488,8 @@
 - **Config TOML** — hot-reload, env vars dinámicas, sin dependencia de Lua
 - 0 warnings, 0 errores
 
-### FASE 8: WebRTC + Streaming
-- LiveKit Server + SDK integration
+### FASE 8: WebRTC + Streaming ✅
+- LiveKit Server + SDK integration — señalización nativa (`sfu_passthrough`, compat SFU) + REST/WS sobre LiveKit
 - P2P calls voz/video (1:1)
 - Flash calls (llamada rápida aleatoria)
 - Duo calls (3 personas)
@@ -499,6 +499,9 @@
 - Call recording (opt-in, encrypted storage)
 - Quality metrics + Simulcast automático
 - Billing por duración (débito wallet)
+- 18+ endpoints REST (calls, rooms, streaming, quality, recording) + señalización WS por rooms
+- 4 tablas redb nuevas (`T_CALL`, `MM_CALL_USER`, `MM_CALL_QUALITY`, `MM_CALL_RECORDING`), pago wallet al finalizar
+- 16 tests webrtc — 293 tests totales, 0 warnings, 0 errores
 
 ### FASE 9: Economía + Pagos Cripto
 - YSH Coins (compra, earn, gasto, staking)
@@ -578,7 +581,7 @@
 - Trust score por usuario (factores: tiempo, verificación, reports)
 - 15+ endpoints (social + admin moderation), auto-moderation por IA en `create_moment`
 - 10 tablas redb (`MM_BLOCK`, `MM_REPORT`, `MM_BADGE`, `MM_RATING`, `MM_CONTENT_FLAG`, `MM_MOD_QUEUE`, `MM_SHADOW`, `MM_APPEAL`, `T_REPUTATION`, `T_TRUST`)
-- 17 tests social — 261 tests totales, 0 warnings, 0 errores
+- 17 tests social — 293 tests totales, 0 warnings, 0 errores
 
 ### FASE 14: Background Jobs + Testing
 - Payout worker (pagos automáticos programados)

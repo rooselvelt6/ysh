@@ -6,6 +6,7 @@ pub mod cache;
 pub mod config;
 pub mod db;
 pub mod i18n;
+pub mod webrtc;
 pub mod encryption;
 pub mod middleware;
 pub mod notification;

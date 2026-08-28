@@ -28,6 +28,8 @@ pub struct YshConfig {
     pub moderation: ModerationConfig,
     #[serde(default = "default_trust")]
     pub trust: TrustConfig,
+    #[serde(default = "default_webrtc")]
+    pub webrtc: WebRtcConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -414,5 +416,55 @@ pub fn default_trust() -> TrustConfig {
         ban_penalty: 40.0,
         badge_bonus: 10.0,
         account_age_bonus_max: 15.0,
+    }
+}
+
+// ═══════════════════════════════════════════
+// FASE 8: WEBRTC + STREAMING CONFIG
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebRtcConfig {
+    pub enabled: bool,
+    /// Signaling relay mode. `sfu_passthrough` relays SDP/ICE between peers
+    /// (works with any WebRTC client); LiveKit/SFU-compatible by design.
+    pub signal_mode: String,
+    /// Max participants by call type.
+    pub p2p_capacity: u32,
+    pub duo_capacity: u32,
+    pub group_capacity: u32,
+    /// Max concurrent viewers on a live stream (1 -> many).
+    pub max_live_viewers: u32,
+    /// Default cost per minute for flash/p2p calls (wallet debit).
+    pub cost_per_minute: i64,
+    /// Charge at per-second granularity (billing por duración).
+    pub billing_per_second: bool,
+    pub recording_enabled: bool,
+    /// Encrypt recording metadata (storage key) before persisting.
+    pub recording_encryption: bool,
+    /// Simulcast tiers advertised to clients.
+    pub simulcast_tiers: Vec<String>,
+    /// Flag a call's quality samples for aggregation after this many chunks.
+    pub quality_chunk_interval: u32,
+    pub flash_random: bool,
+    pub call_timeout_secs: u64,
+}
+
+pub fn default_webrtc() -> WebRtcConfig {
+    WebRtcConfig {
+        enabled: true,
+        signal_mode: "sfu_passthrough".into(),
+        p2p_capacity: 2,
+        duo_capacity: 3,
+        group_capacity: 8,
+        max_live_viewers: 1000,
+        cost_per_minute: 30,
+        billing_per_second: true,
+        recording_enabled: true,
+        recording_encryption: true,
+        simulcast_tiers: vec!["q".into(), "h".into(), "f".into()],
+        quality_chunk_interval: 5,
+        flash_random: true,
+        call_timeout_secs: 30,
     }
 }

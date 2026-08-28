@@ -6,6 +6,7 @@ mod cache;
 mod config;
 mod db;
 mod i18n;
+mod webrtc;
 mod encryption;
 mod middleware;
 mod notification;
@@ -153,10 +154,14 @@ async fn main() -> Result<()> {
     )
     .await?;
 
+    let webrtc_actor_args = actors::webrtc_actor::WebRTCActorArguments {
+        db: db.clone(),
+        config: ysh_config.webrtc.clone(),
+    };
     let (webrtc_actor, _webrtc_handle) = ractor::Actor::spawn(
         Some("webrtc-actor".to_string()),
         actors::webrtc_actor::WebRTCActor,
-        100u32,
+        webrtc_actor_args,
     )
     .await?;
 
@@ -204,14 +209,20 @@ async fn main() -> Result<()> {
     let _ = session_actor.send_message(SessionSupervisorMsg::SessionEnded {
         user_id: "system".to_string(),
     });
+    let (stats_tx, _stats_rx) = tokio::sync::oneshot::channel();
+    let _ = webrtc_actor.send_message(actors::webrtc_actor::WebRTCActorMsg::GetStats { reply_to: stats_tx });
     let _ = webrtc_actor.send_message(actors::webrtc_actor::WebRTCActorMsg::CallStart {
-        caller: "system".to_string(),
-        callee: "system".to_string(),
+        call_id: "startup-probe".to_string(),
+        caller_id: 0,
+        callee_id: 0,
+        call_type: "p2p".to_string(),
     });
     let _ = webrtc_actor.send_message(actors::webrtc_actor::WebRTCActorMsg::CallEnd {
-        caller: "system".to_string(),
-        callee: "system".to_string(),
+        call_id: "startup-probe".to_string(),
+        caller_id: 0,
     });
+    let (stats_tx, _stats_rx) = tokio::sync::oneshot::channel();
+    let _ = webrtc_actor.send_message(actors::webrtc_actor::WebRTCActorMsg::GetStats { reply_to: stats_tx });
     let _ = ai_actor.send_message(actors::ai_actor::AIActorMsg::LoadModel);
     let _ = ai_actor.send_message(actors::ai_actor::AIActorMsg::Moderate {
         content_id: "startup-check".to_string(),
@@ -289,6 +300,13 @@ async fn main() -> Result<()> {
         "i18n: engine initialized"
     );
 
+    let webrtc_rooms = Arc::new(tokio::sync::Mutex::new(webrtc::RoomManager::new(
+        ysh_config.webrtc.p2p_capacity,
+        ysh_config.webrtc.duo_capacity,
+        ysh_config.webrtc.group_capacity,
+        ysh_config.webrtc.max_live_viewers,
+    )));
+
     let state = server::AppState {
         config: config_ref.clone(),
         db: db.clone(),
@@ -306,6 +324,8 @@ async fn main() -> Result<()> {
         circuit_breaker,
         ws_connections,
         read_receipts,
+        webrtc_actor,
+        webrtc_rooms: webrtc_rooms.clone(),
         match_tx,
         ip_blocklist: ip_blocklist.clone(),
         per_ip_limiter,

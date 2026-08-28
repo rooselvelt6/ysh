@@ -15,3 +15,4 @@ pub mod receipt;
 pub mod social;
 pub mod staking;
 pub mod wallet;
+pub mod webrtc;
