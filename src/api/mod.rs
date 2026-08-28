@@ -5,6 +5,7 @@ pub mod chat;
 pub mod commission;
 pub mod gift;
 pub mod host;
+pub mod i18n;
 pub mod moment;
 pub mod notification;
 pub mod payout;

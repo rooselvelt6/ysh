@@ -109,6 +109,13 @@ lettre = { version = "0.11", default-features = false, features = ["tokio1-rustl
 tokio-tungstenite = "0.26"
 
 # ═══════════════════════════════════════════
+# I18N (Project Fluent — 100% Rust)
+# ═══════════════════════════════════════════
+fluent = "0.16"
+fluent-langneg = "0.13"
+unic-langid = { version = "0.9", features = ["macros"] }
+
+# ═══════════════════════════════════════════
 # TEST
 # ═══════════════════════════════════════════
 [dev-dependencies]

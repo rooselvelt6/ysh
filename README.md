@@ -25,7 +25,7 @@
 >
 > Every byte is memory-safe. Every connection is encrypted. Every decision is audited.
 >
-> **227 tests. 0 errors. 0 warnings. Zero compromises.**
+> **244 tests. 0 errors. 0 warnings. Zero compromises.**
 
 ---
 
@@ -81,7 +81,7 @@
 | **Lines of Rust** | ~10,300 |
 | **API Endpoints** | 57+ |
 | **Database Tables** | 40 (10 TableDef + 30 MultimapTableDef) |
-| **Automated Tests** | 227 |
+| **Automated Tests** | 244 |
 | **WebSocket Message Types** | 25 |
 | **Security Controls** | 17+ |
 | **Crypto Algorithms** | 6 (AES, ChaCha, Argon2, Blake3, X25519, Ed25519) |
@@ -399,6 +399,13 @@
 | `/api/v1/ai/neural/train` | POST | Entrenar red neuronal (backprop) |
 | `/api/v1/ai/optimize/genetic` | POST | Optimización genética de parámetros |
 | `/api/v1/ai/stats` | GET | Estado y métricas del motor IA |
+| `/api/v1/i18n/locales` | GET | Listado de idiomas soportados + metadata (RTL, separadores, moneda) |
+| `/api/v1/i18n/detect` | GET | Detección del idioma desde `Accept-Language` |
+| `/api/v1/i18n/translations` | GET | Catálogo resuelto (con fallback + overrides) para un locale |
+| `/api/v1/i18n/translate` | GET | Traducción de una key con args (plural rules) |
+| `/api/v1/admin/i18n` | GET | Listar keys + overrides de traducción (admin) |
+| `/api/v1/admin/i18n` | POST | Upsert override de traducción (admin) |
+| `/api/v1/admin/i18n/{locale}/{key}` | DELETE | Eliminar override de traducción (admin) |
 
 ---
 
@@ -546,17 +553,17 @@
 - Dark/Light mode
 - PWA + offline support (service worker)
 
-### FASE 12: Internationalization (i18n)
-- Fluent (fluent-rs) integration completa
-- 5 idiomas: Español, English, Português, العربية, Français
-- Auto-detección de idioma del browser (Accept-Language)
-- RTL support completo para árabe (layout + components)
-- Dynamic locale switching sin reload
-- Date/time formatting por locale (chrono + fluent)
-- Number/currency formatting por locale
-- Plural rules por idioma (fluent bundles)
-- Translation management (keys, fallback chain)
-- Admin panel para traducciones (CRUD de strings)
+### FASE 12: Internationalization (i18n) ✅
+- **Fluent (fluent-rs) integrado** — bundles compilados on-demand, fallback chain
+- **5 idiomas completos**: Español, English, Português, العربية, Français
+- **Auto-detección del browser** (`Accept-Language`) vía `fluent-langneg` negotiation
+- **RTL completo para árabe** — metadata `dir`/`rtl` servida por API
+- **Plural rules por idioma** (fluent bundles) — incl. forma dual del árabe
+- **Number/currency/date formatting por locale** — separadores decimales/grupo, símbolo moneda, nombres de meses (Rust puro, sin CLDR pesado)
+- **Overrides persistidos en redb** — `i18n_overrides` table (key `locale::key`), cargados al arranque
+- **Admin panel CRUD** — list/upsert/delete de traducciones (protegido, role `admin`)
+- 6 endpoints i18n (4 públicos + 2 admin), probados end-to-end en vivo
+- 9 tests i18n/DB — 244 tests totales, 0 warnings, 0 errores
 
 ### FASE 13: Social Features + Moderación
 - User blocks (bloquear usuarios, ocultar contenido)

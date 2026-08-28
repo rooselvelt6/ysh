@@ -5,6 +5,7 @@ mod auth;
 mod cache;
 mod config;
 mod db;
+mod i18n;
 mod encryption;
 mod middleware;
 mod notification;
@@ -275,6 +276,19 @@ async fn main() -> Result<()> {
     ));
     let (match_tx, _match_rx) = tokio::sync::mpsc::unbounded_channel::<crate::ws::MatchEvent>();
 
+    let i18n_engine = std::sync::Arc::new(crate::i18n::I18nEngine::new());
+    if let Ok(overrides) = db.list_i18n_overrides() {
+        if let Ok(mut guard) = i18n_engine.overrides.lock() {
+            for (k, v) in overrides {
+                guard.insert(k, v);
+            }
+        }
+    }
+    tracing::info!(
+        overrides = i18n_engine.overrides.lock().map(|g| g.len()).unwrap_or(0),
+        "i18n: engine initialized"
+    );
+
     let state = server::AppState {
         config: config_ref.clone(),
         db: db.clone(),
@@ -288,6 +302,7 @@ async fn main() -> Result<()> {
         notification_actor,
         ai_actor,
         ai_engine,
+        i18n_engine,
         circuit_breaker,
         ws_connections,
         read_receipts,

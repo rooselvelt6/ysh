@@ -41,6 +41,7 @@ pub struct AppState {
     pub notification_actor: ractor::ActorRef<NotificationMsg>,
     pub ai_actor: ractor::ActorRef<AIActorMsg>,
     pub ai_engine: std::sync::Arc<AIEngine>,
+    pub i18n_engine: std::sync::Arc<crate::i18n::I18nEngine>,
     pub circuit_breaker: CircuitBreaker,
     pub ws_connections: Arc<tokio::sync::Mutex<ConnectionManager>>,
     pub read_receipts: Arc<tokio::sync::Mutex<std::collections::HashMap<(i64, i64), i64>>>,
@@ -386,6 +387,19 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/ai/stats", get(crate::api::ai::ai_stats));
 
+    let i18n_routes = Router::new()
+        .route("/i18n/locales", get(crate::api::i18n::list_locales))
+        .route("/i18n/detect", get(crate::api::i18n::detect))
+        .route("/i18n/translations", get(crate::api::i18n::translations))
+        .route("/i18n/translate", get(crate::api::i18n::translate));
+    let i18n_admin_routes = Router::new()
+        .route("/admin/i18n", get(crate::api::i18n::admin_list))
+        .route("/admin/i18n", post(crate::api::i18n::admin_upsert))
+        .route(
+            "/admin/i18n/{locale}/{key}",
+            axum::routing::delete(crate::api::i18n::admin_delete),
+        );
+
     let api_routes = Router::new()
         .merge(auth_routes)
         .merge(crypto_routes)
@@ -408,7 +422,9 @@ pub fn build_router(state: AppState) -> Router {
         .merge(admin_routes)
         .merge(notification_routes)
         .merge(chat_routes)
-        .merge(ai_routes);
+        .merge(ai_routes)
+        .merge(i18n_routes)
+        .merge(i18n_admin_routes);
 
     let cors_has_wildcard = state.config.cors.allowed_origins.iter().any(|o| o == "*");
 

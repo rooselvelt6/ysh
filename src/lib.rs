@@ -5,6 +5,7 @@ pub mod auth;
 pub mod cache;
 pub mod config;
 pub mod db;
+pub mod i18n;
 pub mod encryption;
 pub mod middleware;
 pub mod notification;

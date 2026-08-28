@@ -19,6 +19,7 @@ const T_NOTIF_PREF: TableDefinition<&str, &str> = TableDefinition::new("notif_pr
 const T_STAKE: TableDefinition<&str, &str> = TableDefinition::new("staking");
 const T_SPENDING: TableDefinition<&str, &str> = TableDefinition::new("spending_limits");
 const T_COUNTER: TableDefinition<&str, &str> = TableDefinition::new("counters");
+const T_I18N: TableDefinition<&str, &str> = TableDefinition::new("i18n_overrides");
 
 // Multimap tables (one-to-many)
 const MM_RECOVERY: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("recovery_codes");
@@ -385,7 +386,7 @@ impl Database {
     fn init_tables(&self) -> Result<()> {
         let txn = self.inner.begin_write()?;
         // KV tables
-        for t in [T_USER, T_WALLET, T_PROFILE, T_HOST, T_AGENCY, T_CHAT_SESSION, T_NOTIF_PREF, T_STAKE, T_SPENDING, T_COUNTER, IX_USER_BY_USERNAME, IX_USER_BY_EMAIL, IX_REFERRAL_CODE] {
+        for t in [T_USER, T_WALLET, T_PROFILE, T_HOST, T_AGENCY, T_CHAT_SESSION, T_NOTIF_PREF, T_STAKE, T_SPENDING, T_COUNTER, T_I18N, IX_USER_BY_USERNAME, IX_USER_BY_EMAIL, IX_REFERRAL_CODE] {
             txn.open_table(t)?;
         }
         // Multimap tables
@@ -1179,9 +1180,10 @@ impl Database {
                 }
             }
         }
-        all_moments.sort_by(|a, b| b.id.cmp(&a.id));
+all_moments.sort_by(|a, b| b.id.cmp(&a.id));
         drop(t);
         drop(txn);
+
         let likes_table = self.mm_get_all_entries(MM_MOMENT_LIKE)?;
         let results: Vec<serde_json::Value> = all_moments.into_iter().skip(offset as usize).take(limit as usize).map(|m| {
             let like_key = format!("{}_{}", user_id, m.id);
@@ -1278,6 +1280,55 @@ impl Database {
             "total_transaction_volume": 0,
             "notifications": notifications,
         }))
+    }
+
+    // ═══════════════════════════════════════════
+    // I18N OVERRIDES
+    // ═══════════════════════════════════════════
+
+    /// Stores a translation override (admin panel) keyed as `"{locale}::{key}"`.
+    pub fn set_i18n_override(&self, locale: &str, key: &str, value: &str) -> Result<()> {
+        let fk = format!("{locale}::{key}");
+        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+        let txn = self.inner.begin_write()?;
+        {
+            let mut t = txn.open_table(T_I18N)?;
+            t.insert(fk.as_str(), value)?;
+        }
+        txn.commit()?;
+        Ok(())
+    }
+
+    pub fn get_i18n_override(&self, locale: &str, key: &str) -> Result<Option<String>> {
+        let fk = format!("{locale}::{key}");
+        let txn = self.inner.begin_read()?;
+        let t = txn.open_table(T_I18N)?;
+        Ok(t.get(fk.as_str())?.map(|v| v.value().to_string()))
+    }
+
+    pub fn delete_i18n_override(&self, locale: &str, key: &str) -> Result<bool> {
+        let fk = format!("{locale}::{key}");
+        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+        let txn = self.inner.begin_write()?;
+        let removed = {
+            let mut t = txn.open_table(T_I18N)?;
+            let existed = t.get(fk.as_str())?.is_some();
+            t.remove(fk.as_str())?;
+            existed
+        };
+        txn.commit()?;
+        Ok(removed)
+    }
+
+    pub fn list_i18n_overrides(&self) -> Result<Vec<(String, String)>> {
+        let txn = self.inner.begin_read()?;
+        let t = txn.open_table(T_I18N)?;
+        let mut out = Vec::new();
+        for item in t.iter()? {
+            let (k, v) = item?;
+            out.push((k.value().to_string(), v.value().to_string()));
+        }
+        Ok(out)
     }
 
     // ═══════════════════════════════════════════
@@ -2070,6 +2121,7 @@ impl Database {
     pub fn update_notification_status(&self, _notification_id: i64, _status: &str) -> Result<()> { Ok(()) }
     pub fn increment_notification_retries(&self, _notification_id: i64) -> Result<i32> { Ok(0) }
     pub fn get_pending_notifications(&self, _limit: i64) -> Result<Vec<serde_json::Value>> { Ok(vec![]) }
+
 }
 
 // Helper trait

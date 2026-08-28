@@ -637,3 +637,42 @@ mod gift_tests {
         assert_eq!(gifts[0]["from_user"], "rg_alice");
     }
 }
+
+#[cfg(test)]
+mod i18n_override_tests {
+    use super::*;
+
+    #[test]
+    fn i18n_override_roundtrip_and_delete() {
+        let db = test_db();
+        // Initially empty.
+        assert!(db.get_i18n_override("es", "nav-wallet").unwrap().is_none());
+        assert!(db.list_i18n_overrides().unwrap().is_empty());
+
+        db.set_i18n_override("es", "nav-wallet", "Mi Cartera").unwrap();
+        assert_eq!(
+            db.get_i18n_override("es", "nav-wallet").unwrap().unwrap(),
+            "Mi Cartera"
+        );
+        // A different locale is unaffected.
+        assert!(db.get_i18n_override("en", "nav-wallet").unwrap().is_none());
+
+        let all = db.list_i18n_overrides().unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].0, "es::nav-wallet");
+        assert_eq!(all[0].1, "Mi Cartera");
+
+        // Overwrite existing.
+        db.set_i18n_override("es", "nav-wallet", "Cartera 2").unwrap();
+        assert_eq!(
+            db.get_i18n_override("es", "nav-wallet").unwrap().unwrap(),
+            "Cartera 2"
+        );
+
+        // Delete.
+        assert!(db.delete_i18n_override("es", "nav-wallet").unwrap());
+        assert!(db.get_i18n_override("es", "nav-wallet").unwrap().is_none());
+        // Deleting a missing key returns false.
+        assert!(!db.delete_i18n_override("es", "nav-wallet").unwrap());
+    }
+}
