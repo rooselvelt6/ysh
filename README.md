@@ -25,7 +25,7 @@
 >
 > Every byte is memory-safe. Every connection is encrypted. Every decision is audited.
 >
-> **244 tests. 0 errors. 0 warnings. Zero compromises.**
+> **261 tests. 0 errors. 0 warnings. Zero compromises.**
 
 ---
 
@@ -81,7 +81,7 @@
 | **Lines of Rust** | ~10,300 |
 | **API Endpoints** | 57+ |
 | **Database Tables** | 40 (10 TableDef + 30 MultimapTableDef) |
-| **Automated Tests** | 244 |
+| **Automated Tests** | 261 |
 | **WebSocket Message Types** | 25 |
 | **Security Controls** | 17+ |
 | **Crypto Algorithms** | 6 (AES, ChaCha, Argon2, Blake3, X25519, Ed25519) |
@@ -565,7 +565,7 @@
 - 6 endpoints i18n (4 públicos + 2 admin), probados end-to-end en vivo
 - 9 tests i18n/DB — 244 tests totales, 0 warnings, 0 errores
 
-### FASE 13: Social Features + Moderación
+### FASE 13: Social Features + Moderación ✅
 - User blocks (bloquear usuarios, ocultar contenido)
 - User reports (reportar contenido/usuarios con categorías)
 - Verification badges (email, identity, agency, host)
@@ -576,6 +576,9 @@
 - Moderation queue priorizada por severidad
 - Auto-moderation rules configurables
 - Trust score por usuario (factores: tiempo, verificación, reports)
+- 15+ endpoints (social + admin moderation), auto-moderation por IA en `create_moment`
+- 10 tablas redb (`MM_BLOCK`, `MM_REPORT`, `MM_BADGE`, `MM_RATING`, `MM_CONTENT_FLAG`, `MM_MOD_QUEUE`, `MM_SHADOW`, `MM_APPEAL`, `T_REPUTATION`, `T_TRUST`)
+- 17 tests social — 261 tests totales, 0 warnings, 0 errores
 
 ### FASE 14: Background Jobs + Testing
 - Payout worker (pagos automáticos programados)

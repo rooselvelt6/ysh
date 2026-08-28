@@ -58,6 +58,18 @@ const IX_MSG_SESSION: MultimapTableDefinition<&str, &str> = MultimapTableDefinit
 const IX_CHAT_USER: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("ix_chat_user");
 const IX_NFT_USER: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("ix_nft_user");
 
+// Phase 13: Social + Moderation tables
+const T_TRUST: TableDefinition<&str, &str> = TableDefinition::new("trust_scores");
+const T_REPUTATION: TableDefinition<&str, &str> = TableDefinition::new("reputation");
+const MM_BLOCK: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("user_blocks");
+const MM_REPORT: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("reports");
+const MM_BADGE: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("verification_badges");
+const MM_RATING: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("user_ratings");
+const MM_CONTENT_FLAG: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("content_flags");
+const MM_MOD_QUEUE: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("moderation_queue");
+const MM_APPEAL: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("appeals");
+const MM_SHADOW: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("shadow_bans");
+
 // ═══════════════════════════════════════════
 // DATA STRUCTS (serde)
 // ═══════════════════════════════════════════
@@ -304,6 +316,102 @@ pub struct NftGift {
 }
 
 // ═══════════════════════════════════════════
+// PHASE 13: SOCIAL + MODERATION STRUCTS
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockRecord {
+    pub blocked_user_id: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Report {
+    pub id: i64,
+    pub reporter_id: i64,
+    pub target_type: String,      // user | moment | message | host | agency
+    pub target_id: i64,
+    pub category: String,         // spam | nsfw | scam | harassment | violence | fraud | other
+    pub description: String,
+    pub status: String,           // pending | reviewed | actioned | dismissed
+    pub created_at: String,
+    pub reviewed_at: Option<String>,
+    pub reviewed_by: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerificationBadge {
+    pub id: i64,
+    pub user_id: i64,
+    pub badge_type: String,       // email_verified | identity_verified | agency | host | staff
+    pub granted_at: String,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Rating {
+    pub id: i64,
+    pub rater_id: i64,
+    pub score: f64,               // 1.0 – 5.0
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentFlag {
+    pub id: i64,
+    pub target_type: String,      // moment | message | user | host
+    pub target_id: i64,
+    pub flag_type: String,        // nsfw | spam | scam | abuse | other
+    pub source: String,           // auto | manual
+    pub severity: f64,            // 0.0 – 1.0
+    pub description: String,
+    pub status: String,           // pending | reviewed | actioned | dismissed
+    pub created_at: String,
+    pub resolved_at: Option<String>,
+    pub resolved_by: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModQueueItem {
+    pub id: i64,
+    pub item_type: String,        // report | content_flag | appeal | user
+    pub reference_id: i64,
+    pub severity: f64,
+    pub status: String,           // pending | reviewed | actioned | dismissed
+    pub notes: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Appeal {
+    pub id: i64,
+    pub user_id: i64,
+    pub target_type: String,      // ban | shadow_ban | content_flag
+    pub target_id: i64,
+    pub reason: String,
+    pub status: String,           // open | approved | rejected
+    pub created_at: String,
+    pub reviewed_at: Option<String>,
+    pub reviewed_by: Option<i64>,
+    pub admin_notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShadowBan {
+    pub user_id: i64,
+    pub banned_at: String,
+    pub reason: String,
+    pub banned_until: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReputationSummary {
+    pub user_id: i64,
+    pub rating_avg: f64,
+    pub rating_count: i64,
+}
+
+// ═══════════════════════════════════════════
 // INTEGRITY TYPES
 // ═══════════════════════════════════════════
 
@@ -386,11 +494,11 @@ impl Database {
     fn init_tables(&self) -> Result<()> {
         let txn = self.inner.begin_write()?;
         // KV tables
-        for t in [T_USER, T_WALLET, T_PROFILE, T_HOST, T_AGENCY, T_CHAT_SESSION, T_NOTIF_PREF, T_STAKE, T_SPENDING, T_COUNTER, T_I18N, IX_USER_BY_USERNAME, IX_USER_BY_EMAIL, IX_REFERRAL_CODE] {
+        for t in [T_USER, T_WALLET, T_PROFILE, T_HOST, T_AGENCY, T_CHAT_SESSION, T_NOTIF_PREF, T_STAKE, T_SPENDING, T_COUNTER, T_I18N, IX_USER_BY_USERNAME, IX_USER_BY_EMAIL, IX_REFERRAL_CODE, T_TRUST, T_REPUTATION] {
             txn.open_table(t)?;
         }
         // Multimap tables
-        for t in [MM_RECOVERY, MM_CONSENT, MM_DEVICE, MM_AGENCY_MEMBER, MM_TRANSACTION, MM_GIFT, MM_MOMENT, MM_MOMENT_LIKE, MM_MOMENT_COMMENT, MM_NOTIFICATION, MM_PUSH_TOKEN, MM_MSG, MM_CHAT_PARTICIPANT, MM_MATCH_QUEUE, MM_STAKING, MM_REFERRAL, MM_CALL_BILLING, MM_COMMISSION, MM_PAYOUT, MM_FRAUD, MM_RECEIPT, MM_NFT, MM_GIFT_CATALOG, IX_TX_USER, IX_GIFT_FROM, IX_GIFT_TO, IX_NOTIF_USER, IX_MSG_SESSION, IX_CHAT_USER, IX_NFT_USER] {
+        for t in [MM_RECOVERY, MM_CONSENT, MM_DEVICE, MM_AGENCY_MEMBER, MM_TRANSACTION, MM_GIFT, MM_MOMENT, MM_MOMENT_LIKE, MM_MOMENT_COMMENT, MM_NOTIFICATION, MM_PUSH_TOKEN, MM_MSG, MM_CHAT_PARTICIPANT, MM_MATCH_QUEUE, MM_STAKING, MM_REFERRAL, MM_CALL_BILLING, MM_COMMISSION, MM_PAYOUT, MM_FRAUD, MM_RECEIPT, MM_NFT, MM_GIFT_CATALOG, IX_TX_USER, IX_GIFT_FROM, IX_GIFT_TO, IX_NOTIF_USER, IX_MSG_SESSION, IX_CHAT_USER, IX_NFT_USER, MM_BLOCK, MM_REPORT, MM_BADGE, MM_RATING, MM_CONTENT_FLAG, MM_MOD_QUEUE, MM_APPEAL, MM_SHADOW] {
             txn.open_multimap_table(t)?;
         }
         txn.commit()?;
@@ -781,9 +889,15 @@ impl Database {
         let t = txn.open_table(T_USER)?;
         let mut results = Vec::new();
         let pattern = query.to_lowercase();
+        drop(t);
+        drop(txn);
+        let shadow_ids = self.active_shadow_ban_ids()?;
+        let txn = self.inner.begin_read()?;
+        let t = txn.open_table(T_USER)?;
         for entry in t.iter()? {
             let (_, v) = entry?;
             if let Ok(user) = serde_json::from_str::<User>(v.value()) {
+                if shadow_ids.contains(&user.id) { continue; }
                 if user.username.to_lowercase().contains(&pattern) {
                     results.push(serde_json::json!({
                         "id": user.id, "username": user.username, "created_at": user.created_at
@@ -1180,12 +1294,27 @@ impl Database {
                 }
             }
         }
-all_moments.sort_by(|a, b| b.id.cmp(&a.id));
+        all_moments.sort_by(|a, b| b.id.cmp(&a.id));
         drop(t);
         drop(txn);
 
+        let blocked_ids: std::collections::HashSet<i64> = self.get_blocked_users(user_id)?
+            .into_iter().map(|r| r.blocked_user_id).collect();
+        let shadow_ids = self.active_shadow_ban_ids()?;
+        let blocked_content: std::collections::HashSet<i64> = self.get_content_flags(Some("actioned"))?
+            .into_iter()
+            .filter(|f| f.target_type == "moment")
+            .map(|f| f.target_id)
+            .collect();
+
+        let visible: Vec<Moment> = all_moments.into_iter()
+            .filter(|m| !blocked_ids.contains(&m.user_id))
+            .filter(|m| !shadow_ids.contains(&m.user_id))
+            .filter(|m| !blocked_content.contains(&m.id))
+            .collect();
+
         let likes_table = self.mm_get_all_entries(MM_MOMENT_LIKE)?;
-        let results: Vec<serde_json::Value> = all_moments.into_iter().skip(offset as usize).take(limit as usize).map(|m| {
+        let results: Vec<serde_json::Value> = visible.into_iter().skip(offset as usize).take(limit as usize).map(|m| {
             let like_key = format!("{}_{}", user_id, m.id);
             let liked = likes_table.iter().any(|(k, _)| k == &like_key);
             let suffix = format!("_{}", m.id);
@@ -2122,6 +2251,534 @@ all_moments.sort_by(|a, b| b.id.cmp(&a.id));
     pub fn increment_notification_retries(&self, _notification_id: i64) -> Result<i32> { Ok(0) }
     pub fn get_pending_notifications(&self, _limit: i64) -> Result<Vec<serde_json::Value>> { Ok(vec![]) }
 
+    // ═══════════════════════════════════════════
+    // FASE 13: USER BLOCKS
+    // ═══════════════════════════════════════════
+
+    pub fn block_user(&self, blocker_id: i64, blocked_id: i64) -> Result<()> {
+        if blocker_id == blocked_id {
+            anyhow::bail!("Cannot block yourself");
+        }
+        if self.find_user_by_id(blocked_id)?.is_none() {
+            anyhow::bail!("Target user not found");
+        }
+        let rec = BlockRecord { blocked_user_id: blocked_id, created_at: now() };
+        self.mm_add(MM_BLOCK, &blocker_id.to_string(), &to_json(&rec))
+    }
+
+    pub fn unblock_user(&self, blocker_id: i64, blocked_id: i64) -> Result<bool> {
+        let entries = self.mm_get_all(MM_BLOCK, &blocker_id.to_string())?;
+        for entry in &entries {
+            if let Ok(rec) = serde_json::from_str::<BlockRecord>(entry)
+                && rec.blocked_user_id == blocked_id
+            {
+                return self.mm_remove_one(MM_BLOCK, &blocker_id.to_string(), entry);
+            }
+        }
+        Ok(false)
+    }
+
+    pub fn get_blocked_users(&self, blocker_id: i64) -> Result<Vec<BlockRecord>> {
+        let mut recs: Vec<BlockRecord> = self.mm_get_all(MM_BLOCK, &blocker_id.to_string())?
+            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        recs.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(recs)
+    }
+
+    pub fn is_blocked(&self, viewer_id: i64, author_id: i64) -> Result<bool> {
+        Ok(self.get_blocked_users(viewer_id)?.iter().any(|r| r.blocked_user_id == author_id))
+    }
+
+    // ═══════════════════════════════════════════
+    // FASE 13: RATINGS + REPUTATION
+    // ═══════════════════════════════════════════
+
+    pub fn rate_user(&self, rater_id: i64, rated_id: i64, score: f64) -> Result<()> {
+        if rater_id == rated_id {
+            anyhow::bail!("Cannot rate yourself");
+        }
+        if !(1.0..=5.0).contains(&score) {
+            anyhow::bail!("Score must be between 1 and 5");
+        }
+        if self.find_user_by_id(rated_id)?.is_none() {
+            anyhow::bail!("Target user not found");
+        }
+        let entries = self.mm_get_all(MM_RATING, &rated_id.to_string())?;
+        self.mm_remove_all(MM_RATING, &rated_id.to_string())?;
+        let mut rewrote = false;
+        for entry in &entries {
+            if let Ok(mut r) = serde_json::from_str::<Rating>(entry) {
+                if r.rater_id == rater_id {
+                    r.score = score;
+                    r.created_at = now();
+                    rewrote = true;
+                }
+                self.mm_add(MM_RATING, &rated_id.to_string(), &to_json(&r))?;
+            }
+        }
+        if !rewrote {
+            let id = self.next_seq("user_ratings");
+            let r = Rating { id, rater_id, score, created_at: now() };
+            self.mm_add(MM_RATING, &rated_id.to_string(), &to_json(&r))?;
+        }
+        self.recompute_reputation(rated_id)
+    }
+
+    fn recompute_reputation(&self, user_id: i64) -> Result<()> {
+        let entries = self.mm_get_all(MM_RATING, &user_id.to_string())?;
+        let ratings: Vec<Rating> = entries.iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        let avg = if ratings.is_empty() {
+            0.0
+        } else {
+            ratings.iter().map(|r| r.score).sum::<f64>() / ratings.len() as f64
+        };
+        let summary = ReputationSummary {
+            user_id,
+            rating_avg: (avg * 10.0).round() / 10.0,
+            rating_count: ratings.len() as i64,
+        };
+        self.put_json(T_REPUTATION, &user_id.to_string(), &summary)
+    }
+
+    pub fn get_reputation(&self, user_id: i64) -> Result<ReputationSummary> {
+        Ok(self.get_json::<ReputationSummary>(T_REPUTATION, &user_id.to_string())?
+            .unwrap_or(ReputationSummary { user_id, rating_avg: 0.0, rating_count: 0 }))
+    }
+
+    pub fn get_ratings(&self, user_id: i64) -> Result<Vec<Rating>> {
+        Ok(self.mm_get_all(MM_RATING, &user_id.to_string())?
+            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect())
+    }
+
+    // ═══════════════════════════════════════════
+    // FASE 13: VERIFICATION BADGES
+    // ═══════════════════════════════════════════
+
+    pub fn grant_badge(&self, user_id: i64, badge_type: &str) -> Result<i64> {
+        if self.find_user_by_id(user_id)?.is_none() {
+            anyhow::bail!("User not found");
+        }
+        let existing = self.get_user_badges(user_id)?;
+        if existing.iter().any(|b| b.badge_type == badge_type) {
+            anyhow::bail!("Badge already granted");
+        }
+        let id = self.next_seq("verification_badges");
+        let b = VerificationBadge { id, user_id, badge_type: badge_type.into(), granted_at: now(), active: true };
+        self.mm_add(MM_BADGE, &user_id.to_string(), &to_json(&b))?;
+        Ok(id)
+    }
+
+    pub fn revoke_badge(&self, user_id: i64, badge_type: &str) -> Result<bool> {
+        let entries = self.mm_get_all(MM_BADGE, &user_id.to_string())?;
+        self.mm_remove_all(MM_BADGE, &user_id.to_string())?;
+        let mut found = false;
+        for entry in &entries {
+            if let Ok(mut b) = serde_json::from_str::<VerificationBadge>(entry) {
+                if b.badge_type == badge_type && b.active {
+                    b.active = false;
+                    found = true;
+                }
+                self.mm_add(MM_BADGE, &user_id.to_string(), &to_json(&b))?;
+            }
+        }
+        Ok(found)
+    }
+
+    pub fn get_user_badges(&self, user_id: i64) -> Result<Vec<VerificationBadge>> {
+        Ok(self.mm_get_all(MM_BADGE, &user_id.to_string())?
+            .iter().filter_map(|s| serde_json::from_str(s).ok())
+            .filter(|b: &VerificationBadge| b.active).collect())
+    }
+
+    pub fn has_badge(&self, user_id: i64, badge_type: &str) -> Result<bool> {
+        Ok(self.get_user_badges(user_id)?.iter().any(|b| b.badge_type == badge_type))
+    }
+
+    // ═══════════════════════════════════════════
+    // FASE 13: USER REPORTS
+    // ═══════════════════════════════════════════
+
+    pub fn create_report(&self, reporter_id: i64, target_type: &str, target_id: i64, category: &str, description: &str) -> Result<i64> {
+        let id = self.next_seq("reports");
+        let r = Report {
+            id,
+            reporter_id,
+            target_type: target_type.into(),
+            target_id,
+            category: category.into(),
+            description: description.into(),
+            status: "pending".into(),
+            created_at: now(),
+            reviewed_at: None,
+            reviewed_by: None,
+        };
+        self.mm_add(MM_REPORT, "all", &to_json(&r))?;
+        let severity = report_severity(category);
+        self.enqueue_moderation_item("report", id, severity, format!("Report #{}: {} ({})", id, category, target_type))?;
+        Ok(id)
+    }
+
+    pub fn get_reports(&self, status: Option<&str>) -> Result<Vec<Report>> {
+        let mut reports: Vec<Report> = self.mm_get_all(MM_REPORT, "all")?
+            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        if let Some(status) = status {
+            reports.retain(|r| r.status == status);
+        }
+        reports.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(reports)
+    }
+
+    pub fn resolve_report(&self, report_id: i64, resolver_id: i64, status: &str) -> Result<()> {
+        let entries = self.mm_get_all(MM_REPORT, "all")?;
+        self.mm_remove_all(MM_REPORT, "all")?;
+        for entry in &entries {
+            if let Ok(mut r) = serde_json::from_str::<Report>(entry) {
+                if r.id == report_id {
+                    r.status = status.into();
+                    r.reviewed_at = Some(now());
+                    r.reviewed_by = Some(resolver_id);
+                }
+                self.mm_add(MM_REPORT, "all", &to_json(&r))?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn get_user_reports(&self, reporter_id: i64) -> Result<Vec<Report>> {
+        let mut reports: Vec<Report> = self.mm_get_all(MM_REPORT, "all")?
+            .iter().filter_map(|s| serde_json::from_str(s).ok())
+            .filter(|r: &Report| r.reporter_id == reporter_id)
+            .collect();
+        reports.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(reports)
+    }
+
+    pub fn count_open_reports_for(&self, target_type: &str, target_id: i64) -> Result<i64> {
+        let reports = self.get_reports(None)?;
+        Ok(reports.iter()
+            .filter(|r| r.target_type == target_type && r.target_id == target_id
+                && r.status != "dismissed")
+            .count() as i64)
+    }
+
+    pub fn distinct_reporters_for(&self, target_type: &str, target_id: i64) -> Result<i64> {
+        let reports = self.get_reports(None)?;
+        let reporters: std::collections::HashSet<i64> = reports.iter()
+            .filter(|r| r.target_type == target_type && r.target_id == target_id
+                && r.status != "dismissed")
+            .map(|r| r.reporter_id)
+            .collect();
+        Ok(reporters.len() as i64)
+    }
+
+    // ═══════════════════════════════════════════
+    // FASE 13: CONTENT FLAGS (auto + manual)
+    // ═══════════════════════════════════════════
+
+    pub fn flag_content(&self, flag_type: &str, source: &str, target_type: &str, target_id: i64, severity: f64, description: &str) -> Result<i64> {
+        let id = self.next_seq("content_flags");
+        let f = ContentFlag {
+            id,
+            target_type: target_type.into(),
+            target_id,
+            flag_type: flag_type.into(),
+            source: source.into(),
+            severity,
+            description: description.into(),
+            status: "pending".into(),
+            created_at: now(),
+            resolved_at: None,
+            resolved_by: None,
+        };
+        self.mm_add(MM_CONTENT_FLAG, "all", &to_json(&f))?;
+        self.enqueue_moderation_item("content_flag", id, severity, format!("Content flag #{}: {} on {}", id, flag_type, target_type))?;
+        Ok(id)
+    }
+
+    pub fn get_content_flags(&self, status: Option<&str>) -> Result<Vec<ContentFlag>> {
+        let mut flags: Vec<ContentFlag> = self.mm_get_all(MM_CONTENT_FLAG, "all")?
+            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        if let Some(status) = status {
+            flags.retain(|f| f.status == status);
+        }
+        flags.sort_by(|a, b| b.severity
+            .partial_cmp(&a.severity)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| b.created_at.cmp(&a.created_at)));
+        Ok(flags)
+    }
+
+    pub fn resolve_content_flag(&self, flag_id: i64, resolver_id: i64, status: &str) -> Result<()> {
+        let entries = self.mm_get_all(MM_CONTENT_FLAG, "all")?;
+        self.mm_remove_all(MM_CONTENT_FLAG, "all")?;
+        for entry in &entries {
+            if let Ok(mut f) = serde_json::from_str::<ContentFlag>(entry) {
+                if f.id == flag_id {
+                    f.status = status.into();
+                    f.resolved_at = Some(now());
+                    f.resolved_by = Some(resolver_id);
+                }
+                self.mm_add(MM_CONTENT_FLAG, "all", &to_json(&f))?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn is_content_blocked(&self, target_type: &str, target_id: i64) -> Result<bool> {
+        Ok(self.get_content_flags(Some("actioned"))?
+            .iter().any(|f| f.target_type == target_type && f.target_id == target_id))
+    }
+
+    // ═══════════════════════════════════════════
+    // FASE 13: MODERATION QUEUE (priority by severity)
+    // ═══════════════════════════════════════════
+
+    pub fn enqueue_moderation_item(&self, item_type: &str, reference_id: i64, severity: f64, notes: impl Into<String>) -> Result<i64> {
+        let id = self.next_seq("mod_queue");
+        let item = ModQueueItem {
+            id,
+            item_type: item_type.into(),
+            reference_id,
+            severity,
+            status: "pending".into(),
+            notes: notes.into(),
+            created_at: now(),
+        };
+        self.mm_add(MM_MOD_QUEUE, "queue", &to_json(&item))?;
+        Ok(id)
+    }
+
+    pub fn get_moderation_queue(&self, status: Option<&str>) -> Result<Vec<ModQueueItem>> {
+        let mut items: Vec<ModQueueItem> = self.mm_get_all(MM_MOD_QUEUE, "queue")?
+            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        if let Some(status) = status {
+            items.retain(|i| i.status == status);
+        }
+        items.sort_by(|a, b| b.severity
+            .partial_cmp(&a.severity)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| b.created_at.cmp(&a.created_at)));
+        Ok(items)
+    }
+
+    pub fn resolve_moderation_item(&self, item_id: i64, status: &str) -> Result<()> {
+        let entries = self.mm_get_all(MM_MOD_QUEUE, "queue")?;
+        self.mm_remove_all(MM_MOD_QUEUE, "queue")?;
+        for entry in &entries {
+            if let Ok(mut i) = serde_json::from_str::<ModQueueItem>(entry) {
+                if i.id == item_id {
+                    i.status = status.into();
+                }
+                self.mm_add(MM_MOD_QUEUE, "queue", &to_json(&i))?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn pending_moderation_count(&self) -> Result<i64> {
+        Ok(self.get_moderation_queue(Some("pending"))?.len() as i64)
+    }
+
+    // ═══════════════════════════════════════════
+    // FASE 13: SHADOW BANS
+    // ═══════════════════════════════════════════
+
+    pub fn shadow_ban_user(&self, user_id: i64, reason: &str, duration_secs: Option<i64>) -> Result<()> {
+        if self.is_shadow_banned(user_id)? {
+            return Ok(());
+        }
+        let banned_until = duration_secs.map(|secs| {
+            (chrono::Utc::now() + chrono::Duration::seconds(secs))
+                .format("%Y-%m-%dT%H:%M:%SZ").to_string()
+        });
+        let sb = ShadowBan { user_id, banned_at: now(), reason: reason.into(), banned_until };
+        self.mm_add(MM_SHADOW, "all", &to_json(&sb))
+    }
+
+    pub fn unshadow_ban_user(&self, user_id: i64) -> Result<bool> {
+        let entries = self.mm_get_all(MM_SHADOW, "all")?;
+        self.mm_remove_all(MM_SHADOW, "all")?;
+        let mut found = false;
+        for entry in &entries {
+            if let Ok(sb) = serde_json::from_str::<ShadowBan>(entry) {
+                if sb.user_id == user_id {
+                    found = true;
+                    continue;
+                }
+                self.mm_add(MM_SHADOW, "all", &to_json(&sb))?;
+            }
+        }
+        Ok(found)
+    }
+
+    pub fn get_shadow_bans(&self) -> Result<Vec<ShadowBan>> {
+        Ok(self.mm_get_all(MM_SHADOW, "all")?
+            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect())
+    }
+
+    pub fn active_shadow_ban_ids(&self) -> Result<std::collections::HashSet<i64>> {
+        let now_str = now();
+        Ok(self.get_shadow_bans()?
+            .into_iter()
+            .filter(|sb| match &sb.banned_until {
+                Some(until) => until > &now_str,
+                None => true,
+            })
+            .map(|sb| sb.user_id)
+            .collect())
+    }
+
+    pub fn is_shadow_banned(&self, user_id: i64) -> Result<bool> {
+        let now_str = now();
+        Ok(self.get_shadow_bans()?.iter().any(|sb| {
+            sb.user_id == user_id
+                && match &sb.banned_until {
+                    Some(until) => until > &now_str,
+                    None => true,
+                }
+        }))
+    }
+
+    // ═══════════════════════════════════════════
+    // FASE 13: APPEALS
+    // ═══════════════════════════════════════════
+
+    pub fn create_appeal(&self, user_id: i64, target_type: &str, target_id: i64, reason: &str) -> Result<i64> {
+        let id = self.next_seq("appeals");
+        let a = Appeal {
+            id,
+            user_id,
+            target_type: target_type.into(),
+            target_id,
+            reason: reason.into(),
+            status: "open".into(),
+            created_at: now(),
+            reviewed_at: None,
+            reviewed_by: None,
+            admin_notes: String::new(),
+        };
+        self.mm_add(MM_APPEAL, "all", &to_json(&a))?;
+        self.enqueue_moderation_item("appeal", id, 0.7, format!("Appeal #{}: {} #{}", id, target_type, target_id))?;
+        Ok(id)
+    }
+
+    pub fn get_user_appeals(&self, user_id: i64) -> Result<Vec<Appeal>> {
+        let mut appeals: Vec<Appeal> = self.mm_get_all(MM_APPEAL, "all")?
+            .iter().filter_map(|s| serde_json::from_str(s).ok())
+            .filter(|a: &Appeal| a.user_id == user_id)
+            .collect();
+        appeals.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(appeals)
+    }
+
+    pub fn get_appeals(&self, status: Option<&str>) -> Result<Vec<Appeal>> {
+        let mut appeals: Vec<Appeal> = self.mm_get_all(MM_APPEAL, "all")?
+            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        if let Some(status) = status {
+            appeals.retain(|a| a.status == status);
+        }
+        appeals.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(appeals)
+    }
+
+    pub fn resolve_appeal(&self, appeal_id: i64, resolver_id: i64, approved: bool, admin_notes: &str) -> Result<()> {
+        let entries = self.mm_get_all(MM_APPEAL, "all")?;
+        self.mm_remove_all(MM_APPEAL, "all")?;
+        for entry in &entries {
+            if let Ok(mut a) = serde_json::from_str::<Appeal>(entry) {
+                if a.id == appeal_id && a.status == "open" {
+                    a.status = if approved { "approved".into() } else { "rejected".into() };
+                    a.reviewed_at = Some(now());
+                    a.reviewed_by = Some(resolver_id);
+                    a.admin_notes = admin_notes.to_string();
+                    if approved {
+                        match a.target_type.as_str() {
+                            "shadow_ban" => {
+                                let _ = self.unshadow_ban_user(a.user_id)?;
+                                let _ = a.target_id;
+                            }
+                            "ban" => {
+                                self.unban_user(a.user_id)?;
+                                let _ = a.target_id;
+                            }
+                            "content_flag" => {
+                                self.resolve_content_flag(a.target_id, resolver_id, "dismissed")?;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                self.mm_add(MM_APPEAL, "all", &to_json(&a))?;
+            }
+        }
+        Ok(())
+    }
+
+    // ═══════════════════════════════════════════
+    // FASE 13: TRUST SCORE
+    // ═══════════════════════════════════════════
+
+    pub fn compute_trust_score(&self, user_id: i64) -> Result<f64> {
+        let cfg = crate::config::settings::default_trust();
+        let mut score = cfg.starting_score;
+        if !cfg.enabled {
+            return Ok(score);
+        }
+
+        if let Some(u) = self.find_user_by_id(user_id)? {
+            if let Ok(created) = chrono::NaiveDateTime::parse_from_str(&u.created_at, "%Y-%m-%dT%H:%M:%SZ") {
+                let age_days = (chrono::Utc::now() - created.and_utc()).num_days();
+                score += (age_days as f64 / 30.0).min(1.0) * cfg.account_age_bonus_max;
+            }
+            let badge_count = self.get_user_badges(user_id)?.len() as f64;
+            score += badge_count * cfg.badge_bonus;
+            if u.kyc_level >= 2 {
+                score += cfg.badge_bonus;
+            }
+        }
+
+        let reports = self.get_reports(None)?;
+        let report_count = reports.iter()
+            .filter(|r| r.target_type == "user" && r.target_id == user_id && r.status != "dismissed")
+            .count() as f64;
+        score -= report_count * cfg.report_penalty;
+
+        let flags = self.get_content_flags(None)?;
+        let flag_count = flags.iter()
+            .filter(|f| f.target_type == "user" && f.target_id == user_id && f.status != "dismissed")
+            .count() as f64;
+        score -= flag_count * cfg.flag_penalty;
+
+        if self.is_shadow_banned(user_id)? {
+            score -= cfg.shadow_ban_penalty;
+        }
+
+        if let Some(u) = self.find_user_by_id(user_id)?
+            && let Some(l) = &u.locked_until
+            && l.as_str() >= "2099-01-01"
+        {
+            score -= cfg.ban_penalty;
+        }
+
+        let score = score.clamp(0.0, 100.0);
+        let stored = serde_json::json!({ "updated_at": now() });
+        let _ = stored;
+        self.put_json(T_TRUST, &user_id.to_string(), &serde_json::json!({
+            "user_id": user_id,
+            "score": (score * 10.0).round() / 10.0,
+            "updated_at": now(),
+        }))?;
+        Ok(score)
+    }
+
+    pub fn get_trust_score(&self, user_id: i64) -> Result<serde_json::Value> {
+        let score = self.compute_trust_score(user_id)?;
+        Ok(serde_json::json!({
+            "user_id": user_id,
+            "score": (score * 10.0).round() / 10.0,
+            "level": trust_level(score),
+        }))
+    }
 }
 
 // Helper trait
@@ -2131,6 +2788,23 @@ trait Pipe {
 
 impl<T> Pipe for T {
     fn pipe<F, R>(self, f: F) -> R where F: FnOnce(Self) -> R { f(self) }
+}
+
+fn report_severity(category: &str) -> f64 {
+    match category {
+        "scam" | "fraud" => 0.9,
+        "nsfw" | "violence" => 0.8,
+        "harassment" => 0.6,
+        "spam" => 0.4,
+        _ => 0.3,
+    }
+}
+
+fn trust_level(score: f64) -> &'static str {
+    if score >= 80.0 { "excellent" }
+    else if score >= 60.0 { "good" }
+    else if score >= 40.0 { "watch" }
+    else { "restricted" }
 }
 
 // Default impl for User

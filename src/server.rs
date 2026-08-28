@@ -283,7 +283,87 @@ pub fn build_router(state: AppState) -> Router {
             "/admin/user/{user_id}/unban",
             post(crate::api::admin::unban_user),
         )
-        .route("/admin/stats", get(crate::api::admin::platform_stats));
+        .route("/admin/stats", get(crate::api::admin::platform_stats))
+        .route(
+            "/admin/user/{user_id}/shadow-ban",
+            post(crate::api::moderation::shadow_ban_user),
+        )
+        .route(
+            "/admin/user/{user_id}/unshadow-ban",
+            post(crate::api::moderation::unshadow_ban_user),
+        )
+        .route(
+            "/admin/shadow-bans",
+            get(crate::api::moderation::list_shadow_bans),
+        )
+        .route(
+            "/admin/user/{user_id}/badge",
+            post(crate::api::moderation::grant_badge),
+        )
+        .route(
+            "/admin/user/{user_id}/badge/{badge_type}",
+            axum::routing::delete(crate::api::moderation::revoke_badge),
+        );
+
+    let social_routes = Router::new()
+        .route("/block", post(crate::api::social::block_user))
+        .route(
+            "/block/{user_id}",
+            axum::routing::delete(crate::api::social::unblock_user),
+        )
+        .route("/blocks", get(crate::api::social::get_blocked_users))
+        .route("/report", post(crate::api::social::create_report))
+        .route("/reports", get(crate::api::social::get_my_reports))
+        .route("/badges", get(crate::api::social::get_my_badges))
+        .route("/badges/{user_id}", get(crate::api::social::get_user_badges))
+        .route("/rating/{user_id}", post(crate::api::social::rate_user))
+        .route(
+            "/rating/{user_id}",
+            get(crate::api::social::get_user_reputation),
+        )
+        .route("/reputation/{user_id}", get(crate::api::social::get_user_reputation))
+        .route("/trust", get(crate::api::social::get_my_trust))
+        .route("/flag", post(crate::api::social::flag_content))
+        .route("/appeal", post(crate::api::social::create_appeal))
+        .route("/appeals", get(crate::api::social::get_my_appeals));
+
+    let moderation_routes = Router::new()
+        .route(
+            "/admin/moderation/queue",
+            get(crate::api::moderation::get_moderation_queue),
+        )
+        .route(
+            "/admin/moderation/queue/{item_id}",
+            post(crate::api::moderation::resolve_moderation_item),
+        )
+        .route(
+            "/admin/moderation/reports",
+            get(crate::api::moderation::list_reports),
+        )
+        .route(
+            "/admin/moderation/report/{report_id}",
+            post(crate::api::moderation::resolve_report),
+        )
+        .route(
+            "/admin/moderation/flags",
+            get(crate::api::moderation::list_content_flags),
+        )
+        .route(
+            "/admin/moderation/flag/{flag_id}",
+            post(crate::api::moderation::resolve_content_flag),
+        )
+        .route(
+            "/admin/moderation/appeals",
+            get(crate::api::moderation::list_appeals),
+        )
+        .route(
+            "/admin/moderation/appeal/{appeal_id}",
+            post(crate::api::moderation::resolve_appeal),
+        )
+        .route(
+            "/admin/moderation/stats",
+            get(crate::api::moderation::moderation_stats),
+        );
 
     let notification_routes = Router::new()
         .route(
@@ -420,6 +500,8 @@ pub fn build_router(state: AppState) -> Router {
         .merge(commission_routes)
         .merge(moment_routes)
         .merge(admin_routes)
+        .merge(social_routes)
+        .merge(moderation_routes)
         .merge(notification_routes)
         .merge(chat_routes)
         .merge(ai_routes)

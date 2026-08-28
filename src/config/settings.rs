@@ -24,6 +24,10 @@ pub struct YshConfig {
     pub db_encryption: DbEncryptionConfig,
     #[serde(default = "default_ai")]
     pub ai: AiConfig,
+    #[serde(default = "default_moderation")]
+    pub moderation: ModerationConfig,
+    #[serde(default = "default_trust")]
+    pub trust: TrustConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -350,5 +354,65 @@ pub fn default_ai() -> AiConfig {
         annealing_iterations: 1000,
         annealing_step_size: 0.2,
         auto_report_on_block: true,
+    }
+}
+
+// ═══════════════════════════════════════════
+// FASE 13: MODERATION CONFIG
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModerationConfig {
+    pub auto_moderation_enabled: bool,
+    pub auto_moderate_moments: bool,
+    pub auto_moderate_chat: bool,
+    pub auto_flag_threshold: f64,
+    pub auto_shadow_ban_after_reports: i64,
+    pub shadow_ban_duration_secs: i64,
+    pub reports_to_action_threshold: i64,
+}
+
+pub fn default_moderation() -> ModerationConfig {
+    ModerationConfig {
+        auto_moderation_enabled: true,
+        auto_moderate_moments: true,
+        auto_moderate_chat: true,
+        // Severity above which content is auto-flagged (0.0 – 1.0)
+        auto_flag_threshold: 0.30,
+        // Number of distinct reports before a user is auto-shadow-banned
+        auto_shadow_ban_after_reports: 5,
+        // Default shadow ban duration: 24 hours
+        shadow_ban_duration_secs: 86400,
+        // Distinct reports needed to mark an open report as "actioned"
+        reports_to_action_threshold: 3,
+    }
+}
+
+// ═══════════════════════════════════════════
+// FASE 13: TRUST SCORE CONFIG
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrustConfig {
+    pub enabled: bool,
+    pub starting_score: f64,
+    pub report_penalty: f64,
+    pub flag_penalty: f64,
+    pub shadow_ban_penalty: f64,
+    pub ban_penalty: f64,
+    pub badge_bonus: f64,
+    pub account_age_bonus_max: f64,
+}
+
+pub fn default_trust() -> TrustConfig {
+    TrustConfig {
+        enabled: true,
+        starting_score: 60.0,
+        report_penalty: 8.0,
+        flag_penalty: 5.0,
+        shadow_ban_penalty: 25.0,
+        ban_penalty: 40.0,
+        badge_bonus: 10.0,
+        account_age_bonus_max: 15.0,
     }
 }

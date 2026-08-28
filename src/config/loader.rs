@@ -55,6 +55,18 @@ struct RawConfig {
     db_encryption: super::settings::DbEncryptionConfig,
     #[serde(default = "default_ai")]
     ai: super::settings::AiConfig,
+    #[serde(default = "default_moderation")]
+    moderation: super::settings::ModerationConfig,
+    #[serde(default = "default_trust")]
+    trust: super::settings::TrustConfig,
+}
+
+fn default_moderation() -> super::settings::ModerationConfig {
+    super::settings::default_moderation()
+}
+
+fn default_trust() -> super::settings::TrustConfig {
+    super::settings::default_trust()
 }
 
 fn default_ai() -> super::settings::AiConfig {
@@ -189,6 +201,8 @@ impl RawConfig {
             integrity: self.integrity,
             db_encryption: self.db_encryption,
             ai: self.ai,
+            moderation: self.moderation,
+            trust: self.trust,
         })
     }
 }

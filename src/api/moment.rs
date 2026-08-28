@@ -20,10 +20,54 @@ pub async fn create_moment(
     let media_url = req["media_url"].as_str().unwrap_or("");
     let media_type = req["media_type"].as_str().unwrap_or("text");
 
+    let cfg = &state.config.moderation;
+    let mut auto_mod = None;
+    if cfg.auto_moderation_enabled && cfg.auto_moderate_moments {
+        let moderation = state
+            .ai_engine
+            .moderate_text(crate::ai::ModerateRequest {
+                content: content.to_string(),
+            });
+        match moderation.decision {
+            crate::ai::ModerationDecision::Block => {
+                let _ = state.db.flag_content(
+                    "spam",
+                    "auto",
+                    "moment",
+                    0,
+                    moderation.severity,
+                    &format!("Auto block: {}", moderation.matches.join(", ")),
+                );
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    format!(
+                        "Content blocked by moderation: {}",
+                        moderation.matches.join(", ")
+                    ),
+                ));
+            }
+            crate::ai::ModerationDecision::Flag => {
+                auto_mod = Some(moderation);
+            }
+            crate::ai::ModerationDecision::Allow => {}
+        }
+    }
+
     let moment_id = state
         .db
         .create_moment(user_id, content, media_url, media_type)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if let Some(moderation) = auto_mod {
+        let _ = state.db.flag_content(
+            "other",
+            "auto",
+            "moment",
+            moment_id,
+            moderation.severity,
+            "Auto-flagged by AI moderation for review",
+        );
+    }
 
     Ok(Json(serde_json::json!({
         "id": moment_id,

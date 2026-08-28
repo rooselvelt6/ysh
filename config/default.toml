@@ -182,3 +182,28 @@ annealing_cooling_factor = 0.995
 annealing_iterations = 1000
 annealing_step_size = 0.2
 auto_report_on_block = true
+
+# ═══════════════════════════════════════════
+# MODERATION (FASE 13)
+# ═══════════════════════════════════════════
+[moderation]
+auto_moderation_enabled = true
+auto_moderate_moments = true
+auto_moderate_chat = true
+auto_flag_threshold = 0.30          # severity above which content is auto-flagged
+auto_shadow_ban_after_reports = 5   # distinct reports before auto shadow ban
+shadow_ban_duration_secs = 86400    # 24h default shadow ban
+reports_to_action_threshold = 3
+
+# ═══════════════════════════════════════════
+# TRUST SCORE (FASE 13)
+# ═══════════════════════════════════════════
+[trust]
+enabled = true
+starting_score = 60.0
+report_penalty = 8.0
+flag_penalty = 5.0
+shadow_ban_penalty = 25.0
+ban_penalty = 40.0
+badge_bonus = 10.0
+account_age_bonus_max = 15.0
