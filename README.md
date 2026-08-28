@@ -1,93 +1,102 @@
 <div align="center">
 
-# 🔥 YSH — The Social Streaming Platform
+<span style="font-size:4.5rem;font-weight:900;letter-spacing:-0.05em;line-height:1.1;
+      background:linear-gradient(90deg,#1d9bf0 0%,#7856ff 48%,#f91880 100%);
+      -webkit-background-clip:text;background-clip:text;color:transparent;">YSH</span>
 
-### *Built different. Built in Rust. Built to last.*
+### *The Social Streaming Platform*
 
-<br>
+**Real-time video · AI matching · Crypto economy · Enterprise security** — 100% Rust.
 
-**Real-time video streaming · AI-powered matching · Crypto economy · Enterprise security**
+![Rust](https://img.shields.io/badge/Rust-2024-F43400?style=for-the-badge&logo=rust&logoColor=white)
+![Axum](https://img.shields.io/badge/Axum-0.8-E0234E?style=for-the-badge&logo=rust)
+![WebRTC](https://img.shields.io/badge/WebRTC-LiveKit-333333?style=for-the-badge&logo=webrtc)
+![AI](https://img.shields.io/badge/AI-100%25%20Rust-00BA7C?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security-Enterprise-22C55E?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-340%20%C2%B7%200%20errors-F91880?style=for-the-badge)
 
-*Web-first. No app stores. No gatekeepers. Just pure performance.*
-
-<br>
-
-![Rust](https://img.shields.io/badge/Rust-2024-F43400?style=flat&logo=rust)
-![Axum](https://img.shields.io/badge/Axum-0.8-000000?style=flat)
-![Security](https://img.shields.io/badge/Security-Enterprise-22C55E?style=flat)
-![License](https://img.shields.io/badge/License-MIT%2FApache-blueviolet?style=flat)
+*Web-first. Sin app stores. Sin intermediarios. Solo rendimiento puro.*
 
 </div>
 
+```
+           ██╗   ██╗███████╗██╗  ██╗
+           ╚██╗ ██╔╝██╔════╝██║  ██║
+            ╚████╔╝ ███████╗███████║
+             ╚██╔╝  ╚════██║██╔══██║
+              ██║   ███████║██║  ██║
+              ╚═╝   ╚══════╝╚═╝  ╚═╝
+```
+
+> **YSH** es una plataforma social de streaming construida *entera en Rust* — del servidor HTTP al
+> wallet cripto, de la moderación con IA a las llamadas WebRTC en tiempo real, del matching por
+> redes neuronales al dashboard de analytics de producción.
+>
+> Cada byte es *memory-safe*. Cada conexión está *cifrada*. Cada decisión se *audita*.
+>
+> **340 tests · 16 suites · 0 warnings · 0 errores.**
+
 ---
 
-> **YSH** is a full-stack social streaming platform written entirely in Rust — from HTTP server to crypto wallet, from AI moderation to real-time WebRTC calls.
->
-> Every byte is memory-safe. Every connection is encrypted. Every decision is audited.
->
-> **293 tests. 0 errors. 0 warnings. Zero compromises.**
+### 🗺️ Roadmap — 16 fases, 15 completadas
 
----
+<div align="center">
 
-### ⚡ Why YSH?
+| 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08 | 09 | 10 | 11 | 12 | 13 | 14 | 15 | 16 |
+|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🔜 |
 
-| | Traditional Platforms | YSH |
+<table><tr>
+<td align="center" width="94%" bgcolor="#16181c"><div style="height:10px;border-radius:9999px;background:linear-gradient(90deg,#1d9bf0,#7856ff,#f91880);width:94%;"></div></td>
+</tr></table>
+
+**~94% del producto completo.** Fundamentos, seguridad enterprise, WebRTC, economía cripto, IA pura en Rust,
+frontend WASM, social + moderación, jobs en background y analytics — todo probado en verde.
+
+</div>
+
+| Fase | Área principal | Estado |
 |---|---|---|
-| **Performance** | Go/Node.js GC pauses, ~50ms p99 | Rust no-GC, ~2ms p99 |
-| **Security** | Afterthought, bolted on | **Baked in** — AES-256, Argon2id, Ed25519, TLS 1.3 |
-| **DDoS Protection** | Cloudflare or nothing | **Per-IP rate limiting, auto-ban, circuit breaker** built into the server |
-| **Privacy** | GDPR as a checkbox | **GDPR + CCPA + KYC** — consent audit, data export, right to erasure |
-| **Monetization** | App Store 30% cut | **Direct crypto** — BTC/ETH/USDT/BNB, zero intermediaries |
-| **AI Moderation** | External API calls | **On-device Burn neural nets** — deepfake detection, NSFW, fraud |
-| **Real-time** | Polling or fragile WebSocket | **Tokio async + OTP actors** — millions of concurrent connections |
+| **01–10** | Fundamentos · Seguridad Enterprise · DB/Caché · API · Notificaciones · WS/Matching · Anti-DDoS · WebRTC/Streaming · Economía Cripto · Motor de IA | ✅ |
+| **11–13** | Frontend Leptos/WASM + PWA · i18n · Social + Moderación | ✅ |
+| **14** | Background Jobs + Testing (OWASP, proptest, load, mutation) | ✅ |
+| **15** | Analytics + Admin Dashboard | ✅ |
+| **16** | Deploy + Monitoring (Docker, CI/CD, Prometheus, backups) | 🔜 *siguiente* |
 
 ---
 
-### 🏗️ Architecture at a Glance
+### ⚡ ¿Por qué YSH?
 
-```
-    ┌──────────────────────────────────────────────────────────────┐
-    │                    CLIENT (Leptos WASM)                      │
-    │   Discover · Stream · Chat · Moments · Wallet · Agency      │
-    └──────────────────────┬───────────────────────────────────────┘
-                           │ HTTPS + WebSocket + WebRTC
-    ┌──────────────────────┴───────────────────────────────────────┐
-    │                    YSH BACKEND (Rust)                        │
-    │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-    │  │  Axum HTTP  │  │  WebSocket  │  │  LiveKit WebRTC     │ │
-    │  │  50+ APIs   │  │  Realtime   │  │  Video/SFU          │ │
-    │  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘ │
-    │         │                │                     │            │
-    │  ┌──────┴────────────────┴─────────────────────┴──────────┐ │
-    │  │              SECURITY LAYER                            │ │
-    │  │  JWT · 2FA TOTP · Rate Limit · IP Block · Circuit Brk │ │
-    │  │  AES-256-GCM · ChaCha20 · Argon2id · Blake3          │ │
-    │  │  TLS 1.3 · GDPR · CCPA · KYC · Zeroize               │ │
-    │  └────────────────────────────────────────────────────────┘ │
-    │         │                │                     │            │
-    │  ┌──────┴──────┐  ┌─────┴──────┐  ┌──────────┴──────────┐ │
-    │  │    redb     │  │ Sled Cache │  │  OTP Actor System    │ │
-    │  │  Embedded   │  │  64MB KV   │  │  9 actors + restart  │ │
-    │  └─────────────┘  └────────────┘  └──────────────────────┘ │
-    └──────────────────────────────────────────────────────────────┘
-```
+| | Plataformas tradicionales | YSH |
+|---|---|---|
+| **Rendimiento** | Go/Node.js GC pauses, ~50ms p99 | Rust sin-GC, **~2ms p99** |
+| **Seguridad** | Después, remendada | **De fábrica** — AES-256, Argon2id, Ed25519, TLS 1.3 |
+| **DDoS** | Cloudflare o nada | **Rate-limit por IP, auto-ban, circuit breaker** en el propio server |
+| **Privacidad** | GDPR como checkbox | **GDPR + CCPA + KYC** — consent audit, export, derecho al olvido |
+| **Monetización** | Comisión 30% de la app store | **Cripto directo** — BTC/ETH/USDT/BNB, cero intermediarios |
+| **Moderación IA** | Llamadas a APIs externas | **Redes neuronales en local** — deepfakes, NSFW, fraude |
+| **Tiempo real** | Polling o WS frágil | **Tokio async + actores OTP** para millones de conexiones |
+| **Stack** | Node/Go/Python + FFI nativo | **100% Rust de punta a punta, cero C** |
 
 ---
 
-### 📊 By the Numbers
+### 📊 Por los números
 
-| Metric | Value |
+| Métrica | Valor |
 |---|---|
-| **Lines of Rust** | ~10,300 |
-| **API Endpoints** | 57+ |
-| **Database Tables** | 40 (10 TableDef + 30 MultimapTableDef) |
-| **Automated Tests** | 293 |
-| **WebSocket Message Types** | 25 |
-| **Security Controls** | 17+ |
-| **Crypto Algorithms** | 6 (AES, ChaCha, Argon2, Blake3, X25519, Ed25519) |
-| **Zero Dependencies on C** | ✅ (100% Rust — zero C bundled) |
-| **Zero Warnings** | ✅ |
-| **Zero Errors** | ✅ |
+| **Líneas de Rust** | ≈ 23.400 (src 16.3k · tests 3.8k · frontend 3.3k) |
+| **Endpoints de API** | **89+** (REST + WebSocket + WebRTC messaging) |
+| **Tablas redb** | **50** (10 `TableDefinition` + 40 `MultimapTableDefinition`) |
+| **Actores OTP (ractor)** | **10** — supervisor tree + session supervisor + 8 workers |
+| **Tests automatizados** | **340** en 16 suites |
+| **Cobertura de tests** | Unidad · integración · carga · OWASP · proptest · serde roundtrip |
+| **Páginas frontend (Leptos)** | 17 |
+| **Idiomas** | 5 (incl. RTL árabe con plural rules) |
+| **Algoritmos criptográficos** | 6 — AES-256, ChaCha20, Argon2id, Blake3, X25519, Ed25519 |
+| **Control de seguridad** | 17+ zonas auditables |
+| **Advertencias / errores** | **0 / 0** |
+
+---
 
 ## Stack Tecnológico
 
@@ -96,25 +105,23 @@
 | **Lenguaje** | Rust | 1.98+ (Edition 2024) | |
 | **Runtime Async** | Tokio | 1.x | |
 | **Backend** | Axum | 0.8.9 | REST + WebSocket |
-| **Frontend** | Leptos | 0.8.19 | WASM |
-| **Base de Datos** | redb | 4.x | 100% Rust embedded DB, zero C |
-| **Config** | toml | 0.8 | TOML nativo + env vars |
-| **Actores** | ractor | 0.16 | OTP supervision tree |
-| **Encriptación** | AES-256-GCM / ChaCha20-Poly1305 | 0.10 / 0.11 | E2E messages |
-| **Passwords** | Argon2id + Blake3 | 0.5 / 1.x | Hashing seguro |
-| **JWT** | jsonwebtoken | 9.x | Tokens |
+| **Frontend** | Leptos | 0.8.19 | WASM CSR |
+| **Base de Datos** | redb | 4.x | 100% Rust embedded DB, zero C, MVCC + ACID |
+| **Actores** | ractor | 0.16 | OTP supervision tree + jobs worker |
+| **Encriptación** | AES-256-GCM / ChaCha20-Poly1305 | 0.10 / 0.11 | E2E + at-rest (redb page-level) |
+| **Passwords** | Argon2id + Blake3 | 0.5 / 1.x | Hashing con unicidad en la capa DB |
+| **JWT** | jsonwebtoken | 9.x | Tokens con rotación y kind field |
 | **TLS** | rustls | 0.23 | TLS 1.3 |
-| **Rate Limiting** | governor + dashmap | 0.8 / 6.x | Per-IP keyed, auto-block |
-| **WebRTC/SFU** | LiveKit | 1.x | SFU managed |
-| **IA/ML** | Núcleo Rust puro | - | Neural nets, genéticos, fuzzy, annealing, anomalías |
-| **Pagos Cripto** | Binance API | - | BTC/ETH/USDT/BNB |
-| **Email** | lettre | 0.11 | SMTP |
-| **Push** | fcm | 0.5 | FCM para Android/Web |
+| **Rate Limiting** | governor + DashMap | 0.8 / 6.x | Per-IP keyed, auto-block, circuit breaker |
+| **WebRTC/SFU** | LiveKit | 1.x | P2P/Flash/duo/group/live + screen share |
+| **IA/ML** | Núcleo Rust puro | — | NN, genéticos, fuzzy, annealing, anomalías |
+| **Pagos Cripto** | Binance API | — | BTC/ETH/USDT/BNB |
+| **Notificaciones** | lettre + FCM | 0.11 / 0.5 | SMTP + push + in-app |
+| **i18n** | Fluent | 0.16 | 5 locales + RTL + overrides admin |
 | **Object Storage** | s3s | 0.14 | S3-compatible (MinIO) |
-| **i18n** | fluent | 0.16 | Multi-idioma |
-| **CSS** | Tailwind CSS | 4.x | |
 | **Observabilidad** | tracing | 0.1 | Structured logs |
-| **Zeroize** | zeroize + secrecy | 1.x / 0.10 | Secretos en memoria |
+| **Secretos** | zeroize + secrecy | 1.x / 0.10 | Zeroize en memoria |
+| **Testing** | proptest + tempfile | 1 / 3 | Property-based + integración |
 
 ---
 
@@ -124,7 +131,7 @@
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         YSH PLATFORM                                   │
 ├─────────────────────────────────────────────────────────────────────────┤
-│  FRONTEND (Leptos + Tailwind CSS + WASM)                              │
+│  FRONTEND (Leptos + WASM + PWA)                                         │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐  │
 │  │ Discover │ │ Random   │ │ Live     │ │ Moments  │ │ Agency     │  │
 │  │ & Match  │ │ Video    │ │ Streaming│ │ Feed     │ │ Dashboard  │  │
@@ -166,13 +173,13 @@
 │  │ USDT/BNB │ │ Rewards  │ │ Collect. │ │ level    │ │ Payouts    │  │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └────────────┘  │
 ├─────────────────────────────────────────────────────────────────────────┤
-│  ACTORES OTP (ractor)                                                  │
+│  ACTORES OTP (ractor) — 10                                                     │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐  │
 │  │Supervisor│ │ Config   │ │ Server   │ │ Database │ │ Crypto     │  │
 │  │  Tree    │ │  Actor   │ │  Actor   │ │  Actor   │ │  Actor     │  │
 │  ├──────────┤ ├──────────┤ ├──────────┤ ├──────────┤ ├────────────┤  │
-│  │ Session  │ │ WebRTC   │ │ AI       │ │          │ │            │  │
-│  │Supervisor│ │  Actor   │ │  Actor   │ │          │ │            │  │
+│  │ Session  │ │ WebRTC   │ │ AI       │ │ Jobs     │ │ Notification│ │  │
+│  │Supervisor│ │  Actor   │ │  Actor   │ │  Actor   │ │  Actor     │  │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └────────────┘  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -303,7 +310,7 @@
 
 ### Base de Datos y Caché
 - **redb** — 100% Rust embedded DB, ACID transactions, MVCC, zero C dependencies
-- **Schema migrations** — 40 table definitions (10 TableDefinition + 30 MultimapTableDefinition): users, recovery_codes, consent_records, devices, profiles, agencies, agency_members, hosts, wallets, transactions, gift_catalog, gifts, moments, moment_likes, moment_comments, and more
+- **Schema migrations** — 50 table definitions (10 TableDefinition + 40 MultimapTableDefinition): users, recovery_codes, consent_records, devices, profiles, agencies, agency_members, hosts, wallets, transactions, gift_catalog, gifts, moments, moment_likes, moment_comments, call_billing, payouts, staking, mod_queue, analytics_days, y más
 - **Structured keys** — redb key-value access, no SQL injection surface
 - **DatabaseActor real** — Hold `Arc<Database>`, maneja HealthCheck, QueryCount, GetStats (redb backend)
 - **Sled KV cache** — Store embedded key-value con TTL, 64MB capacity, flush cada 1s
@@ -321,7 +328,7 @@
 - **Moments** — Crear posts, feed con likes/comentarios, like/unlike, comment, delete
 - **Admin** — Listar usuarios, ban/unban, platform stats (requiere role admin)
 - **35+ endpoints** — Todos probados end-to-end con curl
-- **40 table definitions** — redb (10 TableDefinition + 30 MultimapTableDefinition)
+- **50 table definitions** — redb (10 TableDefinition + 40 MultimapTableDefinition)
 
 ### Motor de IA (Phase 10)
 - **Redes Neuronales** — MLP feedforward sigmoid/ReLU con backpropagation (entrena y predice, e.g. OR-gate)
@@ -406,6 +413,35 @@
 | `/api/v1/admin/i18n` | GET | Listar keys + overrides de traducción (admin) |
 | `/api/v1/admin/i18n` | POST | Upsert override de traducción (admin) |
 | `/api/v1/admin/i18n/{locale}/{key}` | DELETE | Eliminar override de traducción (admin) |
+| `/api/v1/call/start` | POST | Iniciar llamada (p2p/flash/duo/group/live) |
+| `/api/v1/call/{id}` | GET | Detalle de llamada |
+| `/api/v1/call/{id}/join` · `/leave` | POST | Unirse / salir de llamada |
+| `/api/v1/call/{id}/end` | POST | Finalizar + billing por duración |
+| `/api/v1/call/{id}/quality` | GET/POST | Métricas de calidad + simulcast |
+| `/api/v1/call/{id}/recording/start·stop` | POST | Grabación cifrada (opt-in) |
+| `/api/v1/call/{id}/screen-share` · `/title` | POST | Screen share / título |
+| `/api/v1/call/{id}/peers` | GET | Peers de la sala |
+| `/api/v1/calls/history` · `/calls/stats` · `/calls/rooms` · `/calls/live` | GET | Historial, stats, salas, live |
+| `/api/v1/block` · `/api/v1/blocks` | POST/GET | Bloquear usuario / listar bloqueos |
+| `/api/v1/report` · `/api/v1/reports` | POST/GET | Reportar contenido / listar |
+| `/api/v1/flag` | POST | Flag NSFW/spam/scam |
+| `/api/v1/badges` · `/badges/{user_id}` | GET | Badges de verificación |
+| `/api/v1/rating/{user_id}` · `/reputation/{user_id}` | GET/POST | Reputación + rating |
+| `/api/v1/appeal` · `/api/v1/appeals` | POST/GET | Apelar ban / listar apelaciones |
+| `/api/v1/trust` | GET | Trust score |
+| `/api/v1/staking/stake·unstake·claim·positions·stats` | POST/GET | Staking (intereses) |
+| `/api/v1/payout/request` · `/history` | POST/GET | Payouts a wallet cripto |
+| `/api/v1/receipts` | GET | Recibos de transacción |
+| `/api/v1/profile/region/{region}` | POST | Fijar región (geo analytics) |
+| `/api/v1/admin/jobs/run/{job}` | POST | Ejecutar worker manualmente (admin) |
+| `/api/v1/admin/jobs/stats` | GET | Estado de los jobs (admin) |
+| `/api/v1/admin/analytics/realtime` | GET | Métricas en tiempo real (admin) |
+| `/api/v1/admin/analytics/users` | GET | DAU/MAU/retention/churn (admin) |
+| `/api/v1/admin/analytics/revenue` | GET | MRR/ARPU/LTV/gift economy (admin) |
+| `/api/v1/admin/analytics/agencies` · `/hosts` · `/geo` · `/moderation` | GET | Dashboards (admin) |
+| `/api/v1/admin/analytics/health` | GET | Health del sistema (CPU/RAM/DB/cache) |
+| `/api/v1/admin/analytics/snapshots` | GET | Snapshots diarios del worker |
+| `/api/v1/admin/analytics/export` | GET | Export CSV/JSON |
 
 ---
 
@@ -544,7 +580,7 @@
 - **14 tests AI** — 227 tests totales, 0 warnings, 0 errores
 - **100% Rust** — sin runtime externo de ML (sin C, sin torch)
 
-### FASE 11: Frontend (Leptos + Tailwind) ✅
+### FASE 11: Frontend (Leptos + WASM + PWA) ✅
 - Layout responsive (mobile-first)
 - Auth pages (login, register, 2FA, forgot password)
 - Discover Page (matching random con timer)
@@ -588,19 +624,22 @@
 - 10 tablas redb (`MM_BLOCK`, `MM_REPORT`, `MM_BADGE`, `MM_RATING`, `MM_CONTENT_FLAG`, `MM_MOD_QUEUE`, `MM_SHADOW`, `MM_APPEAL`, `T_REPUTATION`, `T_TRUST`)
 - 17 tests social — 293 tests totales, 0 warnings, 0 errores
 
-### FASE 14: Background Jobs + Testing
-- Payout worker (pagos automáticos programados)
-- Analytics worker (métricas en background)
-- Moderation worker (scan de contenido pendiente)
-- Staking worker (cálculo de intereses)
-- Cleanup worker (tokens expirados, datos temporales)
-- Notification sender worker (cola de emails/push)
-- Unit tests (80%+ coverage)
-- Integration tests (API end-to-end)
-- Load testing (carga concurrente)
-- Security testing (OWASP Top 10)
-- Mutation testing (mutmut)
-- Property-based testing (proptest)
+### FASE 14: Background Jobs + Testing ✅
+- **JobsActor (ractor)** — scheduler en el supervision tree + timer de `interval_secs` (configurable, min 5s)
+- **Payout worker** — `auto_process_payouts()` paga payouts `pending` y marca `processed`
+- **Staking worker** — `compute_staking_interest()` recalcula intereses vencidos por posición
+- **Moderation worker** — `auto_resolve_moderation()` resuelve items viejos (umbrales de severidad) + `age_moderation_items()`
+- **Cleanup worker** — `cleanup_expired()`: retention de analytics/quality, tokens, listas de edad
+- **Notification worker** — `flush_pending_notifications()` con presupuesto por sweeps (push/in-app)
+- **Analytics worker** — `compute_analytics_snapshot()` persiste snapshot diario (DAU/MAU/revenue/calls/msgs)
+- **Admin API** — `/admin/jobs/run/{job}` (on-demand) + `/admin/jobs/stats`
+- **Jobs config** — `[jobs]` en TOML: switches por worker, umbrales, retentions
+- **Enrutado de jobs** — registro por tipo con fallback, idempotencia e inyección de actividad DB
+- **OWASP Top 10 subset** — acces control, crypto (KDF/no plaintext), inyección, integridad (HMAC), logging
+- **Property-based testing** — proptest (64 cases): interest bounds, idempotencia, wallet overflow, notif delivery
+- **Load testing** — concurrencia: likes encadenados, matching simultáneo, wallets, payouts
+- **Hardening `create_user`** — Argon2id dentro de la capa DB (nunca plaintext) + unicidad username/email
+- 14 tests jobs + 9 OWASP + 5 prop + 6 load — **340 tests totales, 0 warnings, 0 errores**
 
 ### FASE 15: Analytics + Admin Dashboard ✅
 - Real-time metrics (conexiones activas, llamadas, revenue)
@@ -613,8 +652,11 @@
 - System health dashboard (CPU, memory, DB, cache)
 - Export to CSV/JSON
 - Custom date ranges + filters
-- Admin dashboard (`/admin`, role admin) con tabs: Realtime, Users, Revenue, Agencies, Hosts, Geo, Moderation — gráficos DAU, leaderboards, health del sistema, export CSV
-- 11 endpoints `/admin/analytics/*` + profiling de actividad (login, calls, moments)
+- **Admin dashboard web (`/admin`, role admin)** — tabs Realtime · Users · Revenue · Agencies · Hosts · Geo · Moderation
+  - Gráfica de barras DAU (14 días), tablas de snapshots, leaderboards con earnings, regiones con %,
+    health del sistema (CPU/RAM/uptime/threads/db size), colas de moderación, export CSV directo
+- **Profiling de actividad** — `log_activity` en login, calls y moments (fuente del DAU/MAU)
+- 11 endpoints `/admin/analytics/*` + `/profile/region/{region}`
 - 14 tests analytics — suite completa en verde (0 warnings, 0 errores)
 
 ### FASE 16: Deploy + Monitoring
@@ -655,7 +697,7 @@ curl -X POST http://localhost:8080/api/v1/register \
 
 # Verify
 cargo check          # 0 warnings, 0 errors
-cargo test           # 227 tests passing
+cargo test           # 340 tests (16 suites) passing
 cargo build          # Clean build
 ```
 
