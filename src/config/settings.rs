@@ -30,6 +30,10 @@ pub struct YshConfig {
     pub trust: TrustConfig,
     #[serde(default = "default_webrtc")]
     pub webrtc: WebRtcConfig,
+    #[serde(default = "default_jobs")]
+    pub jobs: JobsConfig,
+    #[serde(default = "default_analytics")]
+    pub analytics: AnalyticsConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -466,5 +470,70 @@ pub fn default_webrtc() -> WebRtcConfig {
         quality_chunk_interval: 5,
         flash_random: true,
         call_timeout_secs: 30,
+    }
+}
+
+// ═══════════════════════════════════════════
+// FASE 14: BACKGROUND JOBS
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobsConfig {
+    /// Master switch + scheduler interval (seconds).
+    pub enabled: bool,
+    pub interval_secs: u64,
+    /// Per-worker switches.
+    pub payouts: bool,
+    pub staking: bool,
+    pub moderation: bool,
+    pub cleanup: bool,
+    pub notifications: bool,
+    pub analytics: bool,
+    /// Moderation auto-resolution: age (secs) and severity cuts.
+    pub moderation_auto_resolve_secs: i64,
+    pub moderation_dismiss_below: f64,
+    pub moderation_action_above: f64,
+    /// Cleanup retention (days).
+    pub analytics_retention_days: i64,
+    pub quality_retention_days: i64,
+}
+
+pub fn default_jobs() -> JobsConfig {
+    JobsConfig {
+        enabled: true,
+        interval_secs: 60,
+        payouts: true,
+        staking: true,
+        moderation: true,
+        cleanup: true,
+        notifications: true,
+        analytics: true,
+        moderation_auto_resolve_secs: 7 * 24 * 3600,
+        moderation_dismiss_below: 0.4,
+        moderation_action_above: 0.8,
+        analytics_retention_days: 30,
+        quality_retention_days: 7,
+    }
+}
+
+// ═══════════════════════════════════════════
+// FASE 15: ANALYTICS
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalyticsConfig {
+    /// Real-time dashboards + snapshots.
+    pub enabled: bool,
+    /// Default date range for dashboard queries (days).
+    pub default_range_days: i64,
+    /// Keep daily snapshots for this many days.
+    pub snapshot_retention_days: i64,
+}
+
+pub fn default_analytics() -> AnalyticsConfig {
+    AnalyticsConfig {
+        enabled: true,
+        default_range_days: 30,
+        snapshot_retention_days: 90,
     }
 }

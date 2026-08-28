@@ -13,3 +13,4 @@ pub mod agency;
 pub mod chat;
 pub mod notifications;
 pub mod stream;
+pub mod admin;

@@ -48,6 +48,7 @@ pub struct AppState {
     pub read_receipts: Arc<tokio::sync::Mutex<std::collections::HashMap<(i64, i64), i64>>>,
     pub webrtc_actor: ractor::ActorRef<crate::actors::webrtc_actor::WebRTCActorMsg>,
     pub webrtc_rooms: Arc<tokio::sync::Mutex<RoomManager>>,
+    pub jobs_actor: ractor::ActorRef<crate::actors::jobs_actor::JobsActorMsg>,
     pub match_tx: tokio::sync::mpsc::UnboundedSender<MatchEvent>,
     pub ip_blocklist: Arc<IpBlocklist>,
     pub per_ip_limiter: Arc<PerIpRateLimiter>,
@@ -502,6 +503,23 @@ pub fn build_router(state: AppState) -> Router {
             axum::routing::delete(crate::api::i18n::admin_delete),
         );
 
+    let jobs_routes = Router::new()
+        .route("/admin/jobs/run/{job}", post(crate::api::jobs::run_job))
+        .route("/admin/jobs/stats", get(crate::api::jobs::jobs_stats));
+
+    let analytics_routes = Router::new()
+        .route("/admin/analytics/realtime", get(crate::api::analytics::realtime_analytics))
+        .route("/admin/analytics/users", get(crate::api::analytics::user_analytics))
+        .route("/admin/analytics/revenue", get(crate::api::analytics::revenue_analytics))
+        .route("/admin/analytics/agencies", get(crate::api::analytics::agency_analytics))
+        .route("/admin/analytics/hosts", get(crate::api::analytics::hosts_leaderboard))
+        .route("/admin/analytics/geo", get(crate::api::analytics::geo_analytics))
+        .route("/admin/analytics/moderation", get(crate::api::analytics::moderation_analytics))
+        .route("/admin/analytics/health", get(crate::api::analytics::system_health))
+        .route("/admin/analytics/snapshots", get(crate::api::analytics::analytics_snapshots))
+        .route("/admin/analytics/export", get(crate::api::analytics::export_analytics))
+        .route("/profile/region/{region}", post(crate::api::analytics::set_my_region));
+
     let api_routes = Router::new()
         .merge(auth_routes)
         .merge(crypto_routes)
@@ -529,7 +547,9 @@ pub fn build_router(state: AppState) -> Router {
         .merge(chat_routes)
         .merge(ai_routes)
         .merge(i18n_routes)
-        .merge(i18n_admin_routes);
+        .merge(i18n_admin_routes)
+        .merge(jobs_routes)
+        .merge(analytics_routes);
 
     let cors_has_wildcard = state.config.cors.allowed_origins.iter().any(|o| o == "*");
 

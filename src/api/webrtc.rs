@@ -31,6 +31,7 @@ pub async fn start_call(
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let caller_id = parse_uid(&auth)?;
+    let _ = state.db.log_activity(caller_id, "call");
     let call_type_s = req["call_type"].as_str().ok_or((StatusCode::BAD_REQUEST, "call_type required".into()))?;
     let call_type = CallType::parse(call_type_s).ok_or((StatusCode::BAD_REQUEST, "Invalid call_type".into()))?;
     if !state.config.webrtc.enabled {

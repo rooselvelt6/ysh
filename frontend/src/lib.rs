@@ -25,6 +25,7 @@ use crate::pages::agency::AgencyPage;
 use crate::pages::chat::ChatPage;
 use crate::pages::notifications::NotificationsPage;
 use crate::pages::stream::StreamPage;
+use crate::pages::admin::AdminPage;
 
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn main() {
@@ -57,6 +58,7 @@ pub fn App() -> impl IntoView {
                 <Route path=path!("/chat") view=ChatShell/>
                 <Route path=path!("/notifications") view=NotificationsShell/>
                 <Route path=path!("/stream") view=StreamShell/>
+                <Route path=path!("/admin") view=AdminShell/>
             </Routes>
         </Router>
     }
@@ -209,6 +211,20 @@ fn StreamShell() -> impl IntoView {
             <Sidebar/>
             <main class="app-main">
                 <StreamPage/>
+            </main>
+            <RightSidebar/>
+        </div>
+        <BottomNav/>
+    }
+}
+
+#[component]
+fn AdminShell() -> impl IntoView {
+    view! {
+        <div class="app-shell">
+            <Sidebar/>
+            <main class="app-main">
+                <AdminPage/>
             </main>
             <RightSidebar/>
         </div>

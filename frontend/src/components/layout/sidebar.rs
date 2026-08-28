@@ -8,7 +8,7 @@ pub fn Sidebar() -> impl IntoView {
     let loc = use_location();
     let path = move || loc.pathname.get();
 
-    let nav_items = vec![
+    let mut nav_items = vec![
         ("/", "\u{2302}", "Home"),
         ("/discover", "\u{1F50D}", "Discover"),
         ("/notifications", "\u{1F514}", "Notifications"),
@@ -21,6 +21,9 @@ pub fn Sidebar() -> impl IntoView {
         ("/moments", "\u{1F4F7}", "Moments"),
         ("/profile", "\u{1F464}", "Profile"),
     ];
+    if store::get_user().map(|u| u.role == "admin").unwrap_or(false) {
+        nav_items.push(("/admin", "\u{1F4CA}", "Analytics"));
+    }
 
     view! {
         <aside class="sidebar">

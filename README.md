@@ -602,7 +602,7 @@
 - Mutation testing (mutmut)
 - Property-based testing (proptest)
 
-### FASE 15: Analytics + Admin Dashboard
+### FASE 15: Analytics + Admin Dashboard ✅
 - Real-time metrics (conexiones activas, llamadas, revenue)
 - User analytics (DAU, MAU, retention, churn)
 - Revenue analytics (MRR, ARPU, LTV, gift economy metrics)
@@ -613,6 +613,9 @@
 - System health dashboard (CPU, memory, DB, cache)
 - Export to CSV/JSON
 - Custom date ranges + filters
+- Admin dashboard (`/admin`, role admin) con tabs: Realtime, Users, Revenue, Agencies, Hosts, Geo, Moderation — gráficos DAU, leaderboards, health del sistema, export CSV
+- 11 endpoints `/admin/analytics/*` + profiling de actividad (login, calls, moments)
+- 14 tests analytics — suite completa en verde (0 warnings, 0 errores)
 
 ### FASE 16: Deploy + Monitoring
 - Dockerfile multi-stage (build + runtime optimizado)

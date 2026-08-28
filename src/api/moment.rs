@@ -16,6 +16,8 @@ pub async fn create_moment(
         (StatusCode::UNAUTHORIZED, "Invalid token".into())
     })?;
 
+    let _ = state.db.log_activity(user_id, "moment");
+
     let content = req["content"].as_str().unwrap_or("");
     let media_url = req["media_url"].as_str().unwrap_or("");
     let media_type = req["media_type"].as_str().unwrap_or("text");

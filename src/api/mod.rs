@@ -1,11 +1,13 @@
 pub mod admin;
 pub mod agency;
 pub mod ai;
+pub mod analytics;
 pub mod chat;
 pub mod commission;
 pub mod gift;
 pub mod host;
 pub mod i18n;
+pub mod jobs;
 pub mod moderation;
 pub mod moment;
 pub mod notification;

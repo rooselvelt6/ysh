@@ -226,3 +226,29 @@ simulcast_tiers = ["q", "h", "f"]   # low / high / full res
 quality_chunk_interval = 5          # samples agregadas cada N chunk
 flash_random = true
 call_timeout_secs = 30
+
+# ═══════════════════════════════════════════
+# BACKGROUND JOBS (FASE 14)
+# ═══════════════════════════════════════════
+[jobs]
+enabled = true
+interval_secs = 60
+payouts = true
+staking = true
+moderation = true
+cleanup = true
+notifications = true
+analytics = true
+moderation_auto_resolve_secs = 604800   # 7 días
+moderation_dismiss_below = 0.4
+moderation_action_above = 0.8
+analytics_retention_days = 30
+quality_retention_days = 7
+
+# ═══════════════════════════════════════════
+# ANALYTICS (FASE 15)
+# ═══════════════════════════════════════════
+[analytics]
+enabled = true
+default_range_days = 30
+snapshot_retention_days = 90

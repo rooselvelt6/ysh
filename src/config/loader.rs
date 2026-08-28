@@ -61,6 +61,18 @@ struct RawConfig {
     trust: super::settings::TrustConfig,
     #[serde(default = "default_webrtc")]
     webrtc: super::settings::WebRtcConfig,
+    #[serde(default = "default_jobs")]
+    jobs: super::settings::JobsConfig,
+    #[serde(default = "default_analytics")]
+    analytics: super::settings::AnalyticsConfig,
+}
+
+fn default_jobs() -> super::settings::JobsConfig {
+    super::settings::default_jobs()
+}
+
+fn default_analytics() -> super::settings::AnalyticsConfig {
+    super::settings::default_analytics()
 }
 
 fn default_webrtc() -> super::settings::WebRtcConfig {
@@ -210,6 +222,8 @@ impl RawConfig {
             moderation: self.moderation,
             trust: self.trust,
             webrtc: self.webrtc,
+            jobs: self.jobs,
+            analytics: self.analytics,
         })
     }
 }

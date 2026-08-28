@@ -3,7 +3,7 @@ use base64::Engine;
 use serde::Deserialize;
 
 use crate::actors::session_supervisor::SessionSupervisorMsg;
-use crate::security::password::{hash_password, verify_password};
+use crate::security::password::verify_password;
 use crate::security::token::{create_refresh_token, create_token};
 use crate::server::AppState;
 
@@ -59,12 +59,9 @@ pub async fn register(
         ));
     }
 
-    let password_hash = hash_password(&req.password)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
     let user = state
         .db
-        .create_user(&req.username, &req.email, &password_hash)
+        .create_user(&req.username, &req.email, &req.password)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     tracing::info!("User registered: {}", req.username);
@@ -124,6 +121,8 @@ pub async fn login(
         .db
         .reset_failed_attempts(user.id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let _ = state.db.log_activity(user.id, "login");
 
     let _ = state
         .session_actor

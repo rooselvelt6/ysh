@@ -1,7 +1,8 @@
 use anyhow::Result;
-use redb::{Database as RedbDatabase, TableDefinition, MultimapTableDefinition, ReadableTable, ReadableMultimapTable, ReadableDatabase};
+use redb::{Database as RedbDatabase, TableDefinition, MultimapTableDefinition, ReadableTable, ReadableMultimapTable, ReadableDatabase, ReadableTableMetadata};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Mutex;
 
 // ═══════════════════════════════════════════
@@ -75,6 +76,8 @@ const T_CALL: TableDefinition<&str, &str> = TableDefinition::new("calls");
 const MM_CALL_USER: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("mm_call_user");
 const MM_CALL_QUALITY: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("call_quality");
 const MM_CALL_RECORDING: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("call_recordings");
+const MM_USER_ACTIVITY: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("user_activity");
+const MM_ANALYTICS_DAY: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("analytics_days");
 
 // ═══════════════════════════════════════════
 // DATA STRUCTS (serde)
@@ -94,6 +97,8 @@ pub struct User {
     pub totp_enabled: bool,
     pub kyc_level: i32,
     pub do_not_sell: bool,
+    #[serde(default)]
+    pub region: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -495,6 +500,7 @@ pub struct Database {
     next_id: Mutex<i64>,
     db_path: std::path::PathBuf,
     write_lock: std::sync::Mutex<()>,
+    wallet_lock: std::sync::Mutex<()>,
 }
 
 fn to_json<T: Serialize>(v: &T) -> String {
@@ -522,6 +528,7 @@ impl Database {
             next_id: Mutex::new(1),
             db_path: std::path::PathBuf::from(path),
             write_lock: std::sync::Mutex::new(()),
+            wallet_lock: std::sync::Mutex::new(()),
         };
         db.init_tables()?;
         db.seed_gift_catalog()?;
@@ -540,6 +547,7 @@ impl Database {
             next_id: Mutex::new(1),
             db_path: std::path::PathBuf::from(path),
             write_lock: std::sync::Mutex::new(()),
+            wallet_lock: std::sync::Mutex::new(()),
         };
         db.init_tables()?;
         db.seed_gift_catalog()?;
@@ -553,7 +561,7 @@ impl Database {
             txn.open_table(t)?;
         }
         // Multimap tables
-        for t in [MM_RECOVERY, MM_CONSENT, MM_DEVICE, MM_AGENCY_MEMBER, MM_TRANSACTION, MM_GIFT, MM_MOMENT, MM_MOMENT_LIKE, MM_MOMENT_COMMENT, MM_NOTIFICATION, MM_PUSH_TOKEN, MM_MSG, MM_CHAT_PARTICIPANT, MM_MATCH_QUEUE, MM_STAKING, MM_REFERRAL, MM_CALL_BILLING, MM_COMMISSION, MM_PAYOUT, MM_FRAUD, MM_RECEIPT, MM_NFT, MM_GIFT_CATALOG, IX_TX_USER, IX_GIFT_FROM, IX_GIFT_TO, IX_NOTIF_USER, IX_MSG_SESSION, IX_CHAT_USER, IX_NFT_USER, MM_BLOCK, MM_REPORT, MM_BADGE, MM_RATING, MM_CONTENT_FLAG, MM_MOD_QUEUE, MM_APPEAL, MM_SHADOW, MM_CALL_USER, MM_CALL_QUALITY, MM_CALL_RECORDING] {
+        for t in [MM_RECOVERY, MM_CONSENT, MM_DEVICE, MM_AGENCY_MEMBER, MM_TRANSACTION, MM_GIFT, MM_MOMENT, MM_MOMENT_LIKE, MM_MOMENT_COMMENT, MM_NOTIFICATION, MM_PUSH_TOKEN, MM_MSG, MM_CHAT_PARTICIPANT, MM_MATCH_QUEUE, MM_STAKING, MM_REFERRAL, MM_CALL_BILLING, MM_COMMISSION, MM_PAYOUT, MM_FRAUD, MM_RECEIPT, MM_NFT, MM_GIFT_CATALOG, IX_TX_USER, IX_GIFT_FROM, IX_GIFT_TO, IX_NOTIF_USER, IX_MSG_SESSION, IX_CHAT_USER, IX_NFT_USER, MM_BLOCK, MM_REPORT, MM_BADGE, MM_RATING, MM_CONTENT_FLAG, MM_MOD_QUEUE, MM_APPEAL, MM_SHADOW, MM_CALL_USER, MM_CALL_QUALITY, MM_CALL_RECORDING, MM_USER_ACTIVITY, MM_ANALYTICS_DAY] {
             txn.open_multimap_table(t)?;
         }
         txn.commit()?;
@@ -668,13 +676,17 @@ impl Database {
     // USER FUNCTIONS
     // ═══════════════════════════════════════════
 
-    pub fn create_user(&self, username: &str, email: &str, password_hash: &str) -> Result<User> {
+    pub fn create_user(&self, username: &str, email: &str, password: &str) -> Result<User> {
+        if self.user_exists(username, email)? {
+            anyhow::bail!("username or email already exists");
+        }
+        let password_hash = crate::security::password::hash_password(password)?;
         let id = self.next_seq("users");
         let user = User {
             id,
             username: username.to_string(),
             email: email.to_string(),
-            password_hash: password_hash.to_string(),
+            password_hash,
             role: "user".to_string(),
             created_at: now(),
             failed_login_attempts: 0,
@@ -683,6 +695,7 @@ impl Database {
             totp_enabled: false,
             kyc_level: 0,
             do_not_sell: false,
+            region: "unknown".to_string(),
         };
         self.put_json(T_USER, &id.to_string(), &user)?;
         self.put_json(IX_USER_BY_USERNAME, username, &id.to_string())?;
@@ -1089,6 +1102,7 @@ impl Database {
     }
 
     pub fn deposit(&self, user_id: i64, amount: i64, description: &str) -> Result<i64> {
+        let _lock = self.wallet_lock.lock().map_err(|_| anyhow::anyhow!("Wallet lock poisoned"))?;
         self.ensure_wallet(user_id)?;
         let mut w = self.get_json::<Wallet>(T_WALLET, &user_id.to_string())?.unwrap();
         w.balance += amount;
@@ -1101,6 +1115,7 @@ impl Database {
     }
 
     pub fn withdraw(&self, user_id: i64, amount: i64, description: &str) -> Result<i64> {
+        let _lock = self.wallet_lock.lock().map_err(|_| anyhow::anyhow!("Wallet lock poisoned"))?;
         let mut w = self.get_json::<Wallet>(T_WALLET, &user_id.to_string())?.unwrap_or(Wallet { user_id, balance: 0, frozen: false, created_at: now(), updated_at: now() });
         if w.balance < amount {
             anyhow::bail!("Insufficient funds: {} < {}", w.balance, amount);
@@ -1115,6 +1130,7 @@ impl Database {
     }
 
     pub fn transfer(&self, from_user: i64, to_user: i64, amount: i64, description: &str) -> Result<()> {
+        let _lock = self.wallet_lock.lock().map_err(|_| anyhow::anyhow!("Wallet lock poisoned"))?;
         let mut from_w = self.get_json::<Wallet>(T_WALLET, &from_user.to_string())?.unwrap_or(Wallet { user_id: from_user, balance: 0, frozen: false, created_at: now(), updated_at: now() });
         if from_w.balance < amount {
             anyhow::bail!("Insufficient funds: {} < {}", from_w.balance, amount);
@@ -2014,7 +2030,7 @@ impl Database {
                     cb.platform_fee = platform_fee;
                     cb.status = "completed".into();
 
-                    self.mm_remove_all(MM_CALL_BILLING, host_key)?;
+                    self.mm_remove_one(MM_CALL_BILLING, host_key, val)?;
                     self.mm_add(MM_CALL_BILLING, host_key, &to_json(&cb))?;
                     return Ok((total_cost, host_earnings, platform_fee));
                 }
@@ -2040,7 +2056,7 @@ impl Database {
                     let balance = self.withdraw(cb.caller_id, cb.total_cost, &format!("Call #{}", call_id))?;
                     self.deposit(cb.host_id, cb.host_earnings, &format!("Call #{} earnings", call_id))?;
                     cb.paid = true;
-                    self.mm_remove_all(MM_CALL_BILLING, host_key)?;
+                    self.mm_remove_one(MM_CALL_BILLING, host_key, val)?;
                     self.mm_add(MM_CALL_BILLING, host_key, &to_json(&cb))?;
                     return Ok(serde_json::json!({
                         "call_id": call_id,
@@ -3120,6 +3136,715 @@ impl Database {
             "level": trust_level(score),
         }))
     }
+
+    // ═══════════════════════════════════════════
+    // FASE 14: BACKGROUND JOBS (db side)
+    // ═══════════════════════════════════════════
+
+    /// Records a user action for analytics (activity feed, DAU/MAU).
+    pub fn log_activity(&self, user_id: i64, action: &str) -> Result<()> {
+        let day = today();
+        let key = format!("{}::{}", day, user_id);
+        for existing in self.mm_get_all(MM_USER_ACTIVITY, &key)? {
+            if let Ok(ev) = serde_json::from_str::<serde_json::Value>(&existing) {
+                if ev["action"] == action {
+                    return Ok(());
+                }
+            }
+        }
+        let entry = serde_json::json!({ "user_id": user_id, "action": action, "ts": now() });
+        self.mm_add(MM_USER_ACTIVITY, &key, &to_json(&entry))
+    }
+
+    /// Sets the geographic region for a user (geo analytics).
+    pub fn set_user_region(&self, user_id: i64, region: &str) -> Result<()> {
+        let mut user = self
+            .find_user_by_id(user_id)?
+            .ok_or_else(|| anyhow::anyhow!("User not found"))?;
+        user.region = region.to_string();
+        self.put_json(T_USER, &user_id.to_string(), &user)
+    }
+
+    /// Test/tooling helper: backdate a stake's interest reference point.
+    pub fn set_staking_recalc(&self, stake_id: i64, last_reward_calc: &str) -> Result<()> {
+        let entries = self.mm_get_all_entries(MM_STAKING)?;
+        for (user_key, val) in &entries {
+            if let Ok(mut s) = serde_json::from_str::<Staking>(val) {
+                if s.id == stake_id {
+                    s.last_reward_calc = last_reward_calc.to_string();
+                    self.mm_remove_one(MM_STAKING, user_key, val)?;
+                    self.mm_add(MM_STAKING, user_key, &to_json(&s))?;
+                    return Ok(());
+                }
+            }
+        }
+        anyhow::bail!("Stake not found")
+    }
+
+    /// Test/tooling helper: backdate every pending moderation item.
+    pub fn age_moderation_items(&self, secs_back: i64) -> Result<i64> {
+        let mut aged = 0i64;
+        for val in self.mm_get_all(MM_MOD_QUEUE, "queue")? {
+            if let Ok(mut item) = serde_json::from_str::<ModQueueItem>(&val) {
+                let shifted = (chrono::Utc::now() - chrono::Duration::seconds(secs_back))
+                    .format("%Y-%m-%dT%H:%M:%SZ")
+                    .to_string();
+                item.created_at = shifted;
+                self.mm_remove_one(MM_MOD_QUEUE, "queue", &val)?;
+                self.mm_add(MM_MOD_QUEUE, "queue", &to_json(&item))?;
+                aged += 1;
+            }
+        }
+        Ok(aged)
+    }
+
+    /// Test/tooling helper: backdate a match queue entry.
+    pub fn age_match_queue(&self, secs_back: i64) -> Result<i64> {
+        let mut aged = 0i64;
+        for (key, val) in self.mm_get_all_entries(MM_MATCH_QUEUE)? {
+            if let Ok(mut m) = serde_json::from_str::<serde_json::Value>(&val) {
+                let shifted = (chrono::Utc::now() - chrono::Duration::seconds(secs_back))
+                    .format("%Y-%m-%dT%H:%M:%SZ")
+                    .to_string();
+                m["queued_at"] = serde_json::Value::String(shifted);
+                self.mm_remove_one(MM_MATCH_QUEUE, &key, &val)?;
+                self.mm_add(MM_MATCH_QUEUE, &key, &to_json(&m))?;
+                aged += 1;
+            }
+        }
+        Ok(aged)
+    }
+
+    /// Test/tooling helper: backdate activity records by N days (key + ts).
+    pub fn age_activity(&self, days_back: i64) -> Result<i64> {
+        let mut aged = 0i64;
+        for (key, val) in self.mm_get_all_entries(MM_USER_ACTIVITY)? {
+            let shifted_day = (chrono::Utc::now().date_naive() - chrono::Duration::days(days_back))
+                .format("%Y-%m-%d")
+                .to_string();
+            let shifted_ts = (chrono::Utc::now() - chrono::Duration::days(days_back))
+                .format("%Y-%m-%dT%H:%M:%SZ")
+                .to_string();
+            let uid = key.split("::").nth(1).unwrap_or("0");
+            self.mm_remove_one(MM_USER_ACTIVITY, &key, &val)?;
+            if let Ok(mut ev) = serde_json::from_str::<serde_json::Value>(&val) {
+                ev["ts"] = serde_json::Value::String(shifted_ts);
+                self.mm_add(MM_USER_ACTIVITY, &format!("{}::{}", shifted_day, uid), &to_json(&ev))?;
+                aged += 1;
+            }
+        }
+        Ok(aged)
+    }
+
+    /// PAYOUT WORKER: auto-disburses pending payouts (status pending -> completed
+    /// with an auto-generated hash). Returns processed count and total amount.
+    pub fn auto_process_payouts(&self) -> Result<serde_json::Value> {
+        let entries = self.mm_get_all_entries(MM_PAYOUT)?;
+        let mut processed = 0i64;
+        let mut total = 0i64;
+        for (user_key, val) in &entries {
+            if let Ok(mut p) = serde_json::from_str::<Payout>(val) {
+                if p.status == "pending" {
+                    p.status = "completed".into();
+                    p.tx_hash = Some(format!("0xauto{:08x}", p.id));
+                    p.processed_at = Some(now());
+                    p.notes = "Automated disbursement".into();
+                    self.mm_remove_one(MM_PAYOUT, user_key, val)?;
+                    self.mm_add(MM_PAYOUT, user_key, &to_json(&p))?;
+                    processed += 1;
+                    total += p.amount;
+                }
+            }
+        }
+        Ok(serde_json::json!({ "processed": processed, "total_amount": total }))
+    }
+
+    /// STAKING WORKER: accrues compounding interest on active stakes based on
+    /// elapsed time since the last calculation. Rewards are credited to the stake
+    /// and paid out at withdrawal.
+    pub fn compute_staking_interest(&self) -> Result<serde_json::Value> {
+        let entries = self.mm_get_all_entries(MM_STAKING)?;
+        let now_utc = chrono::Utc::now();
+        let mut updated = 0i64;
+        let mut total_interest = 0i64;
+        for (user_key, val) in &entries {
+            if let Ok(mut s) = serde_json::from_str::<Staking>(val) {
+                if s.status != "active" || s.amount <= 0 {
+                    continue;
+                }
+                let last = chrono::DateTime::parse_from_rfc3339(&s.last_reward_calc)
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or(now_utc);
+                let days = (now_utc - last).num_seconds() as f64 / 86400.0;
+                if days < 0.5 {
+                    continue; // cooldown to avoid rounding noise
+                }
+                let interest = ((s.amount as f64) * (s.apy_rate / 100.0) * (days / 365.0)).floor() as i64;
+                if interest > 0 {
+                    s.rewards_earned += interest;
+                    s.last_reward_calc = now();
+                    self.mm_remove_one(MM_STAKING, user_key, val)?;
+                    self.mm_add(MM_STAKING, user_key, &to_json(&s))?;
+                    updated += 1;
+                    total_interest += interest;
+                }
+            }
+        }
+        Ok(serde_json::json!({ "updated": updated, "total_interest": total_interest }))
+    }
+
+    /// MODERATION WORKER: auto-resolves stale pending moderation items. Items
+    /// older than `auto_resolve_secs` with severity >= `action_above` are
+    /// actioned; severity <= `dismiss_below` are dismissed.
+    pub fn auto_resolve_moderation(
+        &self,
+        auto_resolve_secs: i64,
+        dismiss_below: f64,
+        action_above: f64,
+    ) -> Result<serde_json::Value> {
+        let entries = self.mm_get_all(MM_MOD_QUEUE, "queue")?;
+        let now_utc = chrono::Utc::now();
+        let mut dismissed = 0i64;
+        let mut actioned = 0i64;
+        for val in &entries {
+            if let Ok(mut item) = serde_json::from_str::<ModQueueItem>(val) {
+                if item.status != "pending" {
+                    continue;
+                }
+                let age = chrono::DateTime::parse_from_rfc3339(&item.created_at)
+                    .map(|dt| (now_utc - dt.with_timezone(&chrono::Utc)).num_seconds())
+                    .unwrap_or(0);
+                if age < auto_resolve_secs {
+                    continue;
+                }
+                if item.severity >= action_above {
+                    item.status = "actioned".into();
+                    actioned += 1;
+                } else if item.severity <= dismiss_below {
+                    item.status = "dismissed".into();
+                    dismissed += 1;
+                } else {
+                    continue; // keep for human moderator review
+                }
+                self.mm_remove_one(MM_MOD_QUEUE, "queue", val)?;
+                self.mm_add(MM_MOD_QUEUE, "queue", &to_json(&item))?;
+            }
+        }
+        Ok(serde_json::json!({ "dismissed": dismissed, "actioned": actioned }))
+    }
+
+    /// CLEANUP WORKER: removes stale match queue entries (>10 min waiting),
+    /// expired call quality samples, and activity data older than retention.
+    pub fn cleanup_expired(&self, analytics_retention_days: i64, quality_retention_days: i64) -> Result<serde_json::Value> {
+        let now_utc = chrono::Utc::now();
+        let mut removed = 0i64;
+
+        let match_entries = self.mm_get_all_entries(MM_MATCH_QUEUE)?;
+        for (key, val) in &match_entries {
+            if let Ok(m) = serde_json::from_str::<serde_json::Value>(val) {
+                if m["status"] == "waiting"
+                    && m["queued_at"].as_str().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                        .map(|c| (now_utc - c.with_timezone(&chrono::Utc)).num_seconds() > 600)
+                        .unwrap_or(false)
+                {
+                    self.mm_remove_one(MM_MATCH_QUEUE, key, val)?;
+                    removed += 1;
+                }
+            }
+        }
+
+        let quality_entries = self.mm_get_all_entries(MM_CALL_QUALITY)?;
+        for (key, val) in &quality_entries {
+            if let Ok(q) = serde_json::from_str::<serde_json::Value>(val) {
+                if q["ts"].as_str().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|t| (now_utc - t.with_timezone(&chrono::Utc)).num_seconds() > quality_retention_days * 86400)
+                    .unwrap_or(false)
+                {
+                    self.mm_remove_one(MM_CALL_QUALITY, key, val)?;
+                    removed += 1;
+                }
+            }
+        }
+
+        let retention_secs = analytics_retention_days * 86400;
+        let activity_entries = self.mm_get_all_entries(MM_USER_ACTIVITY)?;
+        for (key, _) in &activity_entries {
+            if let Some(day) = key.split("::").next() {
+                if let Ok(d) = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d") {
+                    let then = d.and_hms_opt(0, 0, 0).unwrap().and_utc();
+                    if (now_utc - then).num_seconds() > retention_secs {
+                        self.mm_remove_all(MM_USER_ACTIVITY, key)?;
+                        removed += 1;
+                    }
+                }
+            }
+        }
+
+        Ok(serde_json::json!({ "removed": removed }))
+    }
+
+    /// NOTIFICATION WORKER: advances in-app notifications to `sent` immediately.
+    /// Delivery channels (email/push) bump their retry budget; once exhausted
+    /// the notification moves to `failed`.
+    pub fn flush_pending_notifications(&self) -> Result<serde_json::Value> {
+        let entries = self.mm_get_all_entries(MM_NOTIFICATION)?;
+        let mut sent = 0i64;
+        let mut failed = 0i64;
+        let mut pending = 0i64;
+        for (user_key, val) in &entries {
+            if let Ok(mut n) = serde_json::from_str::<Notification>(val) {
+                if n.status != "pending" {
+                    continue;
+                }
+                if n.channel == "inapp" {
+                    n.status = "sent".into();
+                    n.sent_at = Some(now());
+                    n.retries += 1;
+                    sent += 1;
+                } else {
+                    n.retries += 1;
+                    if n.retries >= 3 {
+                        n.status = "failed".into();
+                        failed += 1;
+                    } else {
+                        pending += 1;
+                    }
+                }
+                self.mm_remove_one(MM_NOTIFICATION, user_key, val)?;
+                self.mm_add(MM_NOTIFICATION, user_key, &to_json(&n))?;
+            }
+        }
+        Ok(serde_json::json!({ "sent": sent, "failed": failed, "pending": pending }))
+    }
+
+    /// ANALYTICS WORKER: computes and persists a daily snapshot (DAU, MAU,
+    /// new users, revenue, calls, gifts, messages).
+    pub fn compute_analytics_snapshot(&self) -> Result<serde_json::Value> {
+        let day = today();
+        let mut day_users: HashSet<i64> = HashSet::new();
+        let mut mau_users: HashSet<i64> = HashSet::new();
+        let now_utc = chrono::Utc::now();
+        let mau_window = now_utc - chrono::Duration::days(30);
+
+        for (key, val) in self.mm_get_all_entries(MM_USER_ACTIVITY)? {
+            if let Ok(ev) = serde_json::from_str::<serde_json::Value>(&val) {
+                let uid = ev["user_id"].as_i64().unwrap_or(-1);
+                if key.starts_with(&format!("{}::", day)) {
+                    day_users.insert(uid);
+                }
+                let ts = ev["ts"].as_str().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|t| t.with_timezone(&chrono::Utc));
+                if let Some(t) = ts {
+                    if t >= mau_window {
+                        mau_users.insert(uid);
+                    }
+                }
+            }
+        }
+
+        let dau = day_users.len() as i64;
+        let mau = mau_users.len() as i64;
+        let new_users = self.count_signups_on(&day)?;
+        let transactions = self.sum_transactions_on(&day)?;
+        let gifts = self.sum_gifts_on(&day)?;
+        let calls = self.count_calls_on(&day)?;
+        let platform_fees = self.sum_call_fees_range(&day, &day)?;
+        let messages = self.count_messages_on(&day)?;
+
+        let snap = serde_json::json!({
+            "date": day, "dau": dau, "mau": mau, "new_users": new_users,
+            "transactions": transactions, "gifts": gifts, "calls": calls,
+            "platform_fees": platform_fees, "messages": messages,
+            "computed_at": now(),
+        });
+        self.mm_add(MM_ANALYTICS_DAY, &day, &to_json(&snap))?;
+        Ok(snap)
+    }
+
+    // ═══════════════════════════════════════════
+    // FASE 15: ANALYTICS (db side)
+    // ═══════════════════════════════════════════
+
+    pub fn db_size(&self) -> Result<u64> {
+        let meta = std::fs::metadata(&self.db_path)?;
+        Ok(meta.len())
+    }
+
+    /// Daily analytics snapshots persisted by the analytics worker.
+    pub fn list_analytics_snapshots(&self, limit: i64) -> Result<Vec<serde_json::Value>> {
+        let mut rows: Vec<serde_json::Value> = self.mm_get_all_entries(MM_ANALYTICS_DAY)?
+            .iter()
+            .filter_map(|(_, v)| serde_json::from_str::<serde_json::Value>(v).ok())
+            .filter(|v| v["date"].is_string())
+            .collect();
+        rows.sort_by(|a, b| b["date"].as_str().cmp(&a["date"].as_str()));
+        rows.truncate(limit.max(1) as usize);
+        Ok(rows)
+    }
+
+    /// Real-time counters that live in the DB.
+    pub fn realtime_db_metrics(&self) -> Result<serde_json::Value> {
+        let mut active_calls = 0i64;
+        for (_, val) in self.mm_get_all_entries(MM_CALL_BILLING)? {
+            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val) {
+                if cb.status == "active" {
+                    active_calls += 1;
+                }
+            }
+        }
+        let pending_reports = self.count_reports_with_status("pending")?;
+        let pending_payouts = self.mm_get_all_entries(MM_PAYOUT)?.iter()
+            .filter(|(_, v)| serde_json::from_str::<Payout>(v).map(|p| p.status == "pending").unwrap_or(false))
+            .count() as i64;
+        Ok(serde_json::json!({
+            "active_calls": active_calls,
+            "pending_reports": pending_reports,
+            "pending_payouts": pending_payouts,
+        }))
+    }
+
+    /// USER ANALYTICS: per-day DAU/new signups over the range, plus rolling MAU,
+    /// retention and churn (today vs yesterday).
+    pub fn get_user_analytics(&self, days: i64) -> Result<serde_json::Value> {
+        let today_utc = chrono::Utc::now().date_naive();
+        let mut series: Vec<serde_json::Value> = Vec::new();
+        let mut day_to_users: BTreeMap<String, HashSet<i64>> = BTreeMap::new();
+
+        for (key, val) in self.mm_get_all_entries(MM_USER_ACTIVITY)? {
+            if let Some((day, _)) = key.split_once("::") {
+                if let Ok(ev) = serde_json::from_str::<serde_json::Value>(&val) {
+                    let uid = ev["user_id"].as_i64().unwrap_or(-1);
+                    day_to_users.entry(day.to_string()).or_default().insert(uid);
+                }
+            }
+        }
+
+        for offset in (0..days).rev() {
+            let day = (today_utc - chrono::Duration::days(offset)).format("%Y-%m-%d").to_string();
+            let dau = day_to_users.get(&day).map(|s| s.len()).unwrap_or(0) as i64;
+            let new_users = self.count_signups_on(&day)?;
+            series.push(serde_json::json!({ "date": day, "dau": dau, "new_users": new_users, "retention": null }));
+        }
+
+        // retention: users active yesterday who are also active today.
+        if series.len() >= 2 {
+            let prev = &series[series.len() - 2]["date"].as_str().unwrap_or("").to_string();
+            let curr = &series[series.len() - 1]["date"].as_str().unwrap_or("").to_string();
+            if let (Some(a), Some(b)) = (day_to_users.get(prev), day_to_users.get(curr)) {
+                let retained = a.intersection(b).count() as f64;
+                if !a.is_empty() {
+                    let retention = retained / a.len() as f64;
+                    if let Some(v) = series.last_mut() {
+                        if let Some(obj) = v.as_object_mut() {
+                            obj.insert("retention".into(), serde_json::json!((retention * 100.0).round() / 100.0));
+                            obj.insert("churn".into(), serde_json::json!(((1.0 - retention) * 100.0).round() / 100.0));
+                        }
+                    }
+                }
+            }
+        }
+
+        let mau: usize = day_to_users.values().flatten().collect::<HashSet<_>>().len();
+        Ok(serde_json::json!({
+            "days": series,
+            "summary": {
+                "mau": mau,
+                "total_dau_last_day": series.last().and_then(|s| s["dau"].as_i64()).unwrap_or(0),
+            }
+        }))
+    }
+
+    /// REVENUE ANALYTICS: MRR proxy, ARPU, LTV and gift/call economy totals.
+    pub fn get_revenue_analytics(&self, days: i64) -> Result<serde_json::Value> {
+        let from = (chrono::Utc::now().date_naive() - chrono::Duration::days(days - 1)).format("%Y-%m-%d").to_string();
+        let to = today();
+        let transactions = self.sum_transactions_range(&from, &to)?;
+        let gifts = self.sum_gifts_range(&from, &to)?;
+        let platform_fees = self.sum_call_fees_range(&from, &to)?;
+        let users = self.count_users()?;
+        let active = self.active_users_last(days)?;
+        let arpu = if active > 0 { (transactions + gifts) / active } else { 0 };
+        Ok(serde_json::json!({
+            "range_days": days,
+            "transactions": transactions,
+            "gifts": gifts,
+            "calls_fees": platform_fees,
+            "gross_volume": transactions + gifts + platform_fees,
+            "arpu": arpu,
+            "ltv": arpu * 12,
+            "active_users": active,
+            "total_users": users,
+        }))
+    }
+
+    /// AGENCY PERFORMANCE: revenue + calls attributed to each agency's members.
+    pub fn get_agency_performance(&self) -> Result<Vec<serde_json::Value>> {
+        let mut member_tx: BTreeMap<i64, i64> = BTreeMap::new();
+        for (_, val) in self.mm_get_all_entries(MM_TRANSACTION)? {
+            if let Ok(t) = serde_json::from_str::<Transaction>(&val) {
+                *member_tx.entry(t.user_id).or_insert(0) += t.amount.abs();
+            }
+        }
+        let mut host_calls: BTreeMap<i64, i64> = BTreeMap::new();
+        for (_, val) in self.mm_get_all_entries(MM_CALL_BILLING)? {
+            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val) {
+                if cb.status == "completed" {
+                    *host_calls.entry(cb.host_id).or_insert(0) += 1;
+                }
+            }
+        }
+
+        let mut out = Vec::new();
+        for agency in self.list_agencies()? {
+            let id = agency["id"].as_i64().unwrap_or(0);
+            let members = self.get_agency_members(id)?;
+            let mut member_revenue = 0i64;
+            let mut member_calls = 0i64;
+            for m in &members {
+                let uid = m["user_id"].as_i64().unwrap_or(0);
+                member_revenue += member_tx.get(&uid).copied().unwrap_or(0);
+                member_calls += host_calls.get(&uid).copied().unwrap_or(0);
+            }
+            out.push(serde_json::json!({
+                "agency_id": id,
+                "name": agency["name"].as_str().unwrap_or(""),
+                "members": members.len(),
+                "member_revenue": member_revenue,
+                "member_calls": member_calls,
+            }));
+        }
+        Ok(out)
+    }
+
+    /// HOST PERFORMANCE: leaderboard of hosts by completed calls + earnings.
+    pub fn get_host_leaderboard(&self, limit: i64) -> Result<Vec<serde_json::Value>> {
+        let mut per_host: BTreeMap<i64, (i64, i64)> = BTreeMap::new();
+        for (_, val) in self.mm_get_all_entries(MM_CALL_BILLING)? {
+            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val) {
+                if cb.status == "completed" {
+                    let e = per_host.entry(cb.host_id).or_insert((0, 0));
+                    e.0 += 1;
+                    e.1 += cb.host_earnings;
+                }
+            }
+        }
+        let mut rows: Vec<serde_json::Value> = per_host.iter().map(|(uid, (calls, earned))| {
+            serde_json::json!({ "host_id": uid, "calls": calls, "earnings": earned })
+        }).collect();
+        rows.sort_by(|a, b| b["earnings"].as_i64().unwrap_or(0).cmp(&a["earnings"].as_i64().unwrap_or(0)));
+        rows.truncate(limit.max(1) as usize);
+        Ok(rows)
+    }
+
+    /// GEOGRAPHIC DISTRIBUTION: user base grouped by region.
+    pub fn get_geo_distribution(&self) -> Result<serde_json::Value> {
+        let mut regions: BTreeMap<String, i64> = BTreeMap::new();
+        let txn = self.inner.begin_read()?;
+        let t = txn.open_table(T_USER)?;
+        for entry in t.iter()? {
+            let (_, v) = entry?;
+            if let Ok(u) = serde_json::from_str::<serde_json::Value>(v.value()) {
+                let region = u["region"].as_str().unwrap_or("unknown").to_string();
+                *regions.entry(region).or_insert(0) += 1;
+            }
+        }
+        let total: i64 = regions.values().sum();
+        let distribution: Vec<serde_json::Value> = regions.iter().map(|(r, c)| {
+            let pct = if total > 0 { (*c as f64 / total as f64 * 100.0) as i64 } else { 0 };
+            serde_json::json!({ "region": r, "users": c, "pct": pct })
+        }).collect();
+        Ok(serde_json::json!({ "total_users": total, "distribution": distribution }))
+    }
+
+    /// MODERATION METRICS: aggregate counts across the moderation pipeline.
+    pub fn get_moderation_metrics(&self) -> Result<serde_json::Value> {
+        let mut queue: BTreeMap<String, i64> = BTreeMap::new();
+        for val in self.mm_get_all(MM_MOD_QUEUE, "queue")? {
+            if let Ok(i) = serde_json::from_str::<ModQueueItem>(&val) {
+                *queue.entry(i.status).or_insert(0) += 1;
+            }
+        }
+        let mut reports: BTreeMap<String, i64> = BTreeMap::new();
+        for val in self.mm_get_all(MM_REPORT, "all")? {
+            if let Ok(r) = serde_json::from_str::<Report>(&val) {
+                *reports.entry(r.status).or_insert(0) += 1;
+            }
+        }
+        let mut appeals: BTreeMap<String, i64> = BTreeMap::new();
+        for val in self.mm_get_all(MM_APPEAL, "all")? {
+            if let Ok(a) = serde_json::from_str::<Appeal>(&val) {
+                *appeals.entry(a.status).or_insert(0) += 1;
+            }
+        }
+        let mut shadow_bans = 0i64;
+        for val in self.mm_get_all(MM_SHADOW, "all")? {
+            if let Ok(sb) = serde_json::from_str::<ShadowBan>(&val) {
+                if let Some(until) = &sb.banned_until {
+                    if let Ok(u) = chrono::DateTime::parse_from_rfc3339(until) {
+                        if chrono::Utc::now() < u.with_timezone(&chrono::Utc) {
+                            shadow_bans += 1;
+                        }
+                    }
+                } else {
+                    shadow_bans += 1;
+                }
+            }
+        }
+        Ok(serde_json::json!({
+            "queue": queue,
+            "reports": reports,
+            "appeals": appeals,
+            "active_shadow_bans": shadow_bans,
+        }))
+    }
+
+    fn count_signups_on(&self, day: &str) -> Result<i64> {
+        let txn = self.inner.begin_read()?;
+        let t = txn.open_table(T_USER)?;
+        let mut count = 0i64;
+        for entry in t.iter()? {
+            let (_, v) = entry?;
+            if let Ok(u) = serde_json::from_str::<serde_json::Value>(v.value()) {
+                if u["created_at"].as_str().map(|s| s.starts_with(day)).unwrap_or(false) {
+                    count += 1;
+                }
+            }
+        }
+        Ok(count)
+    }
+
+    fn count_users(&self) -> Result<i64> {
+        let txn = self.inner.begin_read()?;
+        let t = txn.open_table(T_USER)?;
+        Ok(t.len()? as i64)
+    }
+
+    fn active_users_last(&self, days: i64) -> Result<i64> {
+        let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
+        let mut users: HashSet<i64> = HashSet::new();
+        for (key, val) in self.mm_get_all_entries(MM_USER_ACTIVITY)? {
+            let _ = key;
+            if let Ok(ev) = serde_json::from_str::<serde_json::Value>(&val) {
+                if let Some(ts) = ev["ts"].as_str().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()) {
+                    if ts.with_timezone(&chrono::Utc) >= cutoff {
+                        users.insert(ev["user_id"].as_i64().unwrap_or(-1));
+                    }
+                }
+            }
+        }
+        Ok(users.len() as i64)
+    }
+
+    fn sum_transactions_on(&self, day: &str) -> Result<i64> {
+        let mut total = 0i64;
+        for (_, val) in self.mm_get_all_entries(MM_TRANSACTION)? {
+            if let Ok(t) = serde_json::from_str::<Transaction>(&val) {
+                if t.created_at.starts_with(day) {
+                    total += t.amount.abs();
+                }
+            }
+        }
+        Ok(total)
+    }
+
+    pub fn sum_transactions_range(&self, from: &str, to: &str) -> Result<i64> {
+        let mut total = 0i64;
+        for (_, val) in self.mm_get_all_entries(MM_TRANSACTION)? {
+            if let Ok(t) = serde_json::from_str::<Transaction>(&val) {
+                if t.created_at.len() >= 10 {
+                    let day = &t.created_at[..10];
+                    if day >= from && day <= to {
+                        total += t.amount.abs();
+                    }
+                }
+            }
+        }
+        Ok(total)
+    }
+
+    fn sum_gifts_on(&self, day: &str) -> Result<i64> {
+        let mut total = 0i64;
+        for (key, val) in self.mm_get_all_entries(MM_GIFT)? {
+            if key.parse::<i64>().is_err() {
+                continue; // skip "from_" copies to avoid double counting
+            }
+            if let Ok(g) = serde_json::from_str::<GiftRecord>(&val) {
+                if g.created_at.starts_with(day) {
+                    total += g.price;
+                }
+            }
+        }
+        Ok(total)
+    }
+
+    pub fn sum_gifts_range(&self, from: &str, to: &str) -> Result<i64> {
+        let mut total = 0i64;
+        for (key, val) in self.mm_get_all_entries(MM_GIFT)? {
+            if key.parse::<i64>().is_err() {
+                continue;
+            }
+            if let Ok(g) = serde_json::from_str::<GiftRecord>(&val) {
+                if g.created_at.len() >= 10 {
+                    let day = &g.created_at[..10];
+                    if day >= from && day <= to {
+                        total += g.price;
+                    }
+                }
+            }
+        }
+        Ok(total)
+    }
+
+    fn count_calls_on(&self, day: &str) -> Result<i64> {
+        let mut count = 0i64;
+        for (_, val) in self.mm_get_all_entries(MM_CALL_BILLING)? {
+            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val) {
+                if cb.started_at.starts_with(day) {
+                    count += 1;
+                }
+            }
+        }
+        Ok(count)
+    }
+
+    pub fn sum_call_fees_range(&self, from: &str, to: &str) -> Result<i64> {
+        let mut total = 0i64;
+        for (_, val) in self.mm_get_all_entries(MM_CALL_BILLING)? {
+            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val) {
+                if cb.status == "completed" && cb.started_at.len() >= 10 {
+                    let day = &cb.started_at[..10];
+                    if day >= from && day <= to {
+                        total += cb.platform_fee;
+                    }
+                }
+            }
+        }
+        Ok(total)
+    }
+
+    fn count_messages_on(&self, day: &str) -> Result<i64> {
+        let mut count = 0i64;
+        for (_, val) in self.mm_get_all_entries(MM_MSG)? {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&val) {
+                if v["created_at"].as_str().map(|s| s.starts_with(day)).unwrap_or(false) {
+                    count += 1;
+                }
+            }
+        }
+        Ok(count)
+    }
+
+    fn count_reports_with_status(&self, status: &str) -> Result<i64> {
+        let mut count = 0i64;
+        for val in self.mm_get_all(MM_REPORT, "all")? {
+            if let Ok(r) = serde_json::from_str::<Report>(&val) {
+                if r.status == status {
+                    count += 1;
+                }
+            }
+        }
+        Ok(count)
+    }
 }
 
 // Helper trait
@@ -3155,6 +3880,7 @@ impl Default for User {
             id: 0, username: String::new(), email: String::new(), password_hash: String::new(),
             role: String::new(), created_at: String::new(), failed_login_attempts: 0,
             locked_until: None, totp_secret: None, totp_enabled: false, kyc_level: 0, do_not_sell: false,
+            region: String::new(),
         }
     }
 }

@@ -186,6 +186,18 @@ async fn main() -> Result<()> {
     use actors::session_supervisor::SessionSupervisorMsg;
     use actors::supervisor_tree::SupervisorTreeMsg;
 
+    let jobs_actor_args = actors::jobs_actor::JobsActorArguments {
+        db: db.clone(),
+        config: ysh_config.jobs.clone(),
+    };
+    let (jobs_actor, _jobs_handle) = ractor::Actor::spawn(
+        Some("jobs-actor".to_string()),
+        actors::jobs_actor::JobsActor,
+        jobs_actor_args,
+    )
+    .await?;
+    let _ = jobs_actor.send_message(actors::jobs_actor::JobsActorMsg::RunAnalyticsSnapshot);
+
     let _ = supervisor.send_message(SupervisorTreeMsg::GetConfig);
     let _ = supervisor.send_message(SupervisorTreeMsg::Shutdown);
     let _ = config_actor.send_message(ConfigActorMsg::Reload);
@@ -307,6 +319,18 @@ async fn main() -> Result<()> {
         ysh_config.webrtc.max_live_viewers,
     )));
 
+    let scheduler_actor = jobs_actor.clone();
+    tokio::spawn(async move {
+        let interval = ysh_config.jobs.interval_secs.max(5);
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(interval));
+        loop {
+            tick.tick().await;
+            if ysh_config.jobs.enabled {
+                let _ = scheduler_actor.cast(actors::jobs_actor::JobsActorMsg::RunAll);
+            }
+        }
+    });
+
     let state = server::AppState {
         config: config_ref.clone(),
         db: db.clone(),
@@ -326,6 +350,7 @@ async fn main() -> Result<()> {
         read_receipts,
         webrtc_actor,
         webrtc_rooms: webrtc_rooms.clone(),
+        jobs_actor,
         match_tx,
         ip_blocklist: ip_blocklist.clone(),
         per_ip_limiter,
