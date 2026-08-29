@@ -68,6 +68,7 @@ pub fn build_router(state: AppState) -> Router {
     let auth_routes = Router::new()
         .route("/register", post(crate::auth::handlers::register))
         .route("/login", post(crate::auth::handlers::login))
+        .route("/refresh", post(crate::auth::handlers::refresh))
         .route("/login/2fa", post(crate::auth::handlers::verify_2fa_login))
         .route("/me", get(crate::auth::handlers::me));
 

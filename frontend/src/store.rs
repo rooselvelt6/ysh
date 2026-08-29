@@ -72,6 +72,21 @@ where
     })
 }
 
+pub fn with_refresh_token<F, R>(f: F) -> R
+where
+    F: FnOnce(Option<&str>) -> R,
+{
+    REFRESH_TOKEN.with(|t| {
+        let borrow = t.borrow();
+        f(borrow.as_deref())
+    })
+}
+
+pub fn set_access_token(access: &str) {
+    AUTH_TOKEN.with(|t| *t.borrow_mut() = Some(access.to_string()));
+    let _ = LocalStorage::set(TOKEN_KEY, access);
+}
+
 pub fn init_theme() -> bool {
     let dark = LocalStorage::get::<bool>(THEME_KEY).unwrap_or(true);
     apply_theme(dark);

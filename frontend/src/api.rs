@@ -49,28 +49,99 @@ fn handle_unauthorized() {
     }
 }
 
-fn is_unauthorized(status: u16) -> bool {
-    status == 401 && with_token(|t| t.is_some())
+/// Intenta renovar el access token usando el refresh token. Devuelve true si
+/// se obtuvo un token nuevo; false si no hay sesion valida para renovar.
+async fn try_refresh_token() -> bool {
+    use crate::store::with_refresh_token;
+    let Some(refresh) = with_refresh_token(|t| t.map(|s| s.to_string())) else {
+        return false;
+    };
+    let url = format!("{}/refresh", base_url());
+    let body = serde_json::json!({ "refresh_token": refresh });
+    let json = serde_json::to_string(&body).unwrap_or_default();
+    let resp = Request::post(&url)
+        .header("Content-Type", "application/json")
+        .body(json)
+        .map_err(|e| ApiError::Network(format!("Failed to create request: {e:?}")))
+        .ok();
+    let resp = match resp {
+        Some(r) => match r.send().await {
+            Ok(r) => r,
+            Err(_) => return false,
+        },
+        None => return false,
+    };
+    if !resp.ok() {
+        return false;
+    }
+    let val: serde_json::Value = match resp.json().await {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    if let Some(at) = val.get("access_token").and_then(|v| v.as_str()) {
+        crate::store::set_access_token(at);
+        true
+    } else {
+        false
+    }
 }
 
-pub async fn post<T: DeserializeOwned>(path: &str, body: &impl serde::Serialize) -> Result<T, ApiError> {
+async fn send(
+    method: gloo_net::http::Method,
+    path: &str,
+    body: Option<&str>,
+) -> Result<gloo_net::http::Response, ApiError> {
     let url = format!("{}{path}", base_url());
-    let json = serde_json::to_string(body)
-        .map_err(|e| ApiError::Deserialize(format!("Serialize error: {e}")))?;
 
-    let mut builder = Request::post(&url).header("Content-Type", "application/json");
-    if let Some(token) = auth_header() {
-        builder = builder.header("Authorization", &token);
-    }
+    let method_c = method.clone();
+    let body_c = body.map(|s| s.to_string());
 
-    let resp = builder
-        .body(json)
-        .map_err(|e| ApiError::Network(format!("Failed to create request: {e:?}")))?;
+    let do_request = |url: String, token: Option<&str>| -> Result<gloo_net::http::Request, ApiError> {
+        let mut builder = match method_c {
+            gloo_net::http::Method::GET => Request::get(&url),
+            _ => Request::post(&url),
+        }
+        .header("Content-Type", "application/json");
+        if let Some(token) = token {
+            builder = builder.header("Authorization", token);
+        }
+        match &body_c {
+            Some(json) => builder
+                .body(json.clone())
+                .map_err(|e| ApiError::Network(format!("Body error: {e:?}"))),
+            None => builder
+                .body("")
+                .map_err(|e| ApiError::Network(format!("Body error: {e:?}"))),
+        }
+    };
 
-    let resp = resp
+    let token_for_send = auth_header().map(|s| s.clone());
+    let req = do_request(url.clone(), token_for_send.as_deref())?;
+    let resp = req
         .send()
         .await
         .map_err(|e| ApiError::Network(format!("{e:?}")))?;
+
+    if resp.status() == 401 && with_token(|t| t.is_some()) {
+        if try_refresh_token().await {
+            let new_token_for_send = auth_header().map(|s| s.clone());
+            let req = do_request(url.clone(), new_token_for_send.as_deref())?;
+            let resp = req
+                .send()
+                .await
+                .map_err(|e| ApiError::Network(format!("{e:?}")))?;
+            return Ok(resp);
+        } else {
+            handle_unauthorized();
+        }
+    }
+    Ok(resp)
+}
+
+pub async fn post<T: DeserializeOwned>(path: &str, body: &impl serde::Serialize) -> Result<T, ApiError> {
+    let json = serde_json::to_string(body)
+        .map_err(|e| ApiError::Deserialize(format!("Serialize error: {e}")))?;
+    let resp = send(gloo_net::http::Method::POST, path, Some(&json)).await?;
 
     if resp.ok() {
         resp.json::<T>()
@@ -79,25 +150,12 @@ pub async fn post<T: DeserializeOwned>(path: &str, body: &impl serde::Serialize)
     } else {
         let status = resp.status();
         let msg = resp.text().await.unwrap_or_default();
-        if is_unauthorized(status) {
-            handle_unauthorized();
-        }
         Err(ApiError::Server { status, message: msg })
     }
 }
 
 pub async fn get<T: DeserializeOwned>(path: &str) -> Result<T, ApiError> {
-    let url = format!("{}{path}", base_url());
-
-    let mut builder = Request::get(&url);
-    if let Some(token) = auth_header() {
-        builder = builder.header("Authorization", &token);
-    }
-
-    let resp = builder
-        .send()
-        .await
-        .map_err(|e| ApiError::Network(format!("{e:?}")))?;
+    let resp = send(gloo_net::http::Method::GET, path, None).await?;
 
     if resp.ok() {
         resp.json::<T>()
@@ -106,9 +164,6 @@ pub async fn get<T: DeserializeOwned>(path: &str) -> Result<T, ApiError> {
     } else {
         let status = resp.status();
         let msg = resp.text().await.unwrap_or_default();
-        if is_unauthorized(status) {
-            handle_unauthorized();
-        }
         Err(ApiError::Server { status, message: msg })
     }
 }

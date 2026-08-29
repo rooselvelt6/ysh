@@ -3,16 +3,16 @@ use leptos::prelude::*;
 #[component]
 pub fn RightSidebar() -> impl IntoView {
     let trending = vec![
-        ("YSH Live", "Trending \u{00B7} Entertainment"),
-        ("Gifts", "Trending \u{00B7} 1.2K posts"),
-        ("New Hosts", "Trending \u{00B7} Community"),
-        ("Live Streaming", "Trending \u{00B7} Technology"),
+        ("YSH Live", "\u{2728} Now streaming"),
+        ("Aurora Mode", "\u{2728} Exclusive"),
+        ("New Hosts", "\u{2728} Rising stars"),
+        ("Live Universe", "\u{2728} Community"),
     ];
 
     let who_to_follow = vec![
         ("Maria", "@maria_live", "Live host"),
         ("Alex", "@alex_stream", "Content creator"),
-        ("YSH Official", "@ysh_official", "Platform updates"),
+        ("YSH Official", "@ysh_official", "Universe updates"),
     ];
 
     view! {

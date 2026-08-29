@@ -1,7 +1,7 @@
 /* YSH — Service Worker (PWA + offline support)
    App shell precached; navigation is network-first with offline fallback;
    static assets (pkg, styles, icons) are cache-first. */
-const CACHE = 'ysh-v3';
+const CACHE = 'ysh-v6';
 const SHELL = ['/', '/index.html', '/style.css', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -15,9 +15,14 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    )
+    ).then(() => self.clients.claim())
+    // Tras tomar control, recarga todas las pestañas abiertas para que
+    // apliquen la version nueva de la app sin hard-reload manual.
+    .then(() => self.clients.matchAll({ type: 'window' }))
+    .then((clients) => {
+      clients.forEach((client) => client.navigate(client.url));
+    })
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {

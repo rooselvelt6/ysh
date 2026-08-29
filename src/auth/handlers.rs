@@ -189,6 +189,54 @@ pub async fn me(auth: crate::auth::jwt::AuthUser) -> Json<serde_json::Value> {
 }
 
 #[derive(Deserialize)]
+pub struct RefreshRequest {
+    pub refresh_token: String,
+}
+
+pub async fn refresh(
+    State(state): State<AppState>,
+    Json(req): Json<RefreshRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let secret = state.secure_jwt_secret.as_str().as_bytes();
+    let claims = crate::security::token::validate_token(&req.refresh_token, secret)
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid refresh token".into()))?;
+
+    if claims.kind != "refresh" {
+        return Err((StatusCode::UNAUTHORIZED, "Not a refresh token".into()));
+    }
+
+    let user_id: i64 = claims
+        .sub
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid user id".into()))?;
+
+    let user = state
+        .db
+        .find_user_by_id(user_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "User not found".into()))?;
+
+    let access_token = create_token(
+        &user.id.to_string(),
+        &user.role,
+        secret,
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let _ = state.session_cache.store_session(
+        &access_token,
+        &user.id.to_string(),
+        std::time::Duration::from_secs(86400),
+    );
+
+    Ok(Json(serde_json::json!({
+        "access_token": access_token,
+        "token_type": "Bearer",
+        "expires_in": 86400,
+    })))
+}
+
+#[derive(Deserialize)]
 pub struct CryptoRequest {
     pub data: String,
 }
