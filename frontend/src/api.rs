@@ -42,6 +42,17 @@ fn auth_header() -> Option<String> {
     with_token(|t| t.map(|s| format!("Bearer {s}")))
 }
 
+fn handle_unauthorized() {
+    crate::store::clear_auth();
+    if let Some(win) = web_sys::window() {
+        let _ = win.location().set_href("/login");
+    }
+}
+
+fn is_unauthorized(status: u16) -> bool {
+    status == 401 && with_token(|t| t.is_some())
+}
+
 pub async fn post<T: DeserializeOwned>(path: &str, body: &impl serde::Serialize) -> Result<T, ApiError> {
     let url = format!("{}{path}", base_url());
     let json = serde_json::to_string(body)
@@ -68,6 +79,9 @@ pub async fn post<T: DeserializeOwned>(path: &str, body: &impl serde::Serialize)
     } else {
         let status = resp.status();
         let msg = resp.text().await.unwrap_or_default();
+        if is_unauthorized(status) {
+            handle_unauthorized();
+        }
         Err(ApiError::Server { status, message: msg })
     }
 }
@@ -92,6 +106,9 @@ pub async fn get<T: DeserializeOwned>(path: &str) -> Result<T, ApiError> {
     } else {
         let status = resp.status();
         let msg = resp.text().await.unwrap_or_default();
+        if is_unauthorized(status) {
+            handle_unauthorized();
+        }
         Err(ApiError::Server { status, message: msg })
     }
 }
