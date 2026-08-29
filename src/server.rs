@@ -2,15 +2,16 @@ use axum::{
     Router,
     body::Body,
     extract::State,
-    http::{Method, Request, StatusCode},
+    http::{Method, Request, StatusCode, Uri},
     middleware::{self, Next},
-    response::Response,
+    response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
 use std::sync::Arc;
+use tower::util::ServiceExt;
 use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::services::ServeDir;
 use tower_http::timeout::TimeoutLayer;
 
 use crate::actors::ai_actor::AIActorMsg;
@@ -629,16 +630,63 @@ pub fn build_router(state: AppState) -> Router {
     let index_html = std::path::Path::new(&static_dir).join("index.html");
     if std::path::Path::new(&static_dir).is_dir() && index_html.exists() {
         tracing::info!("Serving frontend static files from {}", static_dir);
-        let serve = ServeDir::new(static_dir)
-            .append_index_html_on_directories(true)
-            .not_found_service(ServeFile::new(index_html));
-        app.fallback_service(serve).with_state(state)
+        app.fallback(spa_fallback).with_state(state)
     } else {
         tracing::warn!(
             "Static dir {} not found — API only (frontend WASM no disponible en /)",
             static_dir
         );
         app.fallback(static_not_found).with_state(state)
+    }
+}
+
+/// Fallback SPA: sirve assets estáticos reales de `static_dir` tal cual; para
+/// cualquier otra ruta (rutas del router frontend como `/login`, `/wallet`,
+/// `/moments`...) devuelve `index.html` con status 200 para que el SPA decida.
+/// Las rutas de API/WS/health no coincidentes devuelven 404 JSON (no deben
+/// enmascararse con el HTML del SPA).
+async fn spa_fallback(
+    State(state): State<AppState>,
+    uri: Uri,
+    request: Request<Body>,
+) -> Response {
+    let path = uri.path().trim_start_matches('/');
+    if path.starts_with("api/") || path == "ws" || path == "metrics" || path == "healthz" || path == "readyz" {
+        return static_not_found().await.into_response();
+    }
+
+    let static_dir = state.config.server.static_dir.clone();
+    let root = std::path::Path::new(&static_dir);
+    let safe = path
+        .split('/')
+        .filter(|seg| !seg.is_empty() && *seg != "." && *seg != "..")
+        .collect::<Vec<_>>()
+        .join("/");
+    let file_path = if safe.is_empty() {
+        root.join("index.html")
+    } else {
+        root.join(&safe)
+    };
+
+    if file_path.is_file() {
+        if let Ok(resp) = ServeDir::new(&static_dir)
+            .oneshot(request)
+            .await
+        {
+            return resp.into_response();
+        }
+    }
+
+    match tokio::fs::read(root.join("index.html")).await {
+        Ok(bytes) => {
+            let nf = static_not_found().await;
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", "text/html; charset=utf-8")
+                .body(Body::from(bytes))
+                .unwrap_or_else(|_| nf.into_response())
+        }
+        Err(_) => static_not_found().await.into_response(),
     }
 }
 

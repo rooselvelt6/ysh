@@ -1,7 +1,7 @@
 /* YSH — Service Worker (PWA + offline support)
    App shell precached; navigation is network-first with offline fallback;
    static assets (pkg, styles, icons) are cache-first. */
-const CACHE = 'ysh-v1';
+const CACHE = 'ysh-v2';
 const SHELL = ['/', '/index.html', '/style.css', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -41,18 +41,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache-first, then network + put in cache.
+  // Static assets: stale-while-revalidate (sirve la cacheada y actualiza en
+  // background) para que los deploys nuevos de /pkg lleguen sin esperar el
+  // vencimiento del cache.
   if (url.pathname.startsWith('/pkg/') || SHELL.includes(url.pathname) || url.pathname.startsWith('/icon-')) {
     event.respondWith(
       caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
-          }
-          return res;
-        });
+        const network = fetch(request)
+          .then((res) => {
+            if (res.ok) {
+              const copy = res.clone();
+              caches.open(CACHE).then((cache) => cache.put(request, copy));
+            }
+            return res;
+          })
+          .catch(() => cached);
+        return cached || network;
       })
     );
   }

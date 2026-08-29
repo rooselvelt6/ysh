@@ -114,8 +114,9 @@ pub async fn get<T: DeserializeOwned>(path: &str) -> Result<T, ApiError> {
 }
 
 pub fn go(path: &str) {
-    let nav = leptos_router::hooks::use_navigate();
-    nav(path, leptos_router::NavigateOptions::default());
+    if let Some(win) = web_sys::window() {
+        let _ = win.location().set_href(path);
+    }
 }
 
 use std::cell::RefCell;
