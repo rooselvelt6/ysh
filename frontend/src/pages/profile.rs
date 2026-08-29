@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 use crate::api;
 use crate::store;
+use crate::components::ui::toast::ToastCtx;
 
 
 #[component]
@@ -11,6 +12,7 @@ pub fn ProfilePage() -> impl IntoView {
     let (display_name, set_display_name) = signal(String::new());
     let (bio, set_bio) = signal(String::new());
     let (country, set_country) = signal(String::new());
+    let toast = ToastCtx::use_();
 
     wasm_bindgen_futures::spawn_local(async move {
         if let Ok(val) = api::get::<serde_json::Value>("/profile").await {
@@ -36,7 +38,10 @@ pub fn ProfilePage() -> impl IntoView {
         let c = country.get();
         wasm_bindgen_futures::spawn_local(async move {
             let req = serde_json::json!({"display_name": dn, "bio": b, "country": c});
-            let _ = api::post::<serde_json::Value>("/profile", &req).await;
+            match api::post::<serde_json::Value>("/profile", &req).await {
+                Ok(_) => toast.success("Profile saved!"),
+                Err(e) => toast.error(format!("Failed: {e}")),
+            }
             set_editing.set(false);
             if let Ok(val) = api::get::<serde_json::Value>("/profile").await {
                 set_profile.set(Some(val));

@@ -1,11 +1,13 @@
 use leptos::prelude::*;
+use wasm_bindgen_futures::spawn_local;
 use crate::api;
+use crate::components::ui::toast::ToastCtx;
 
 #[component]
 pub fn DiscoverPage() -> impl IntoView {
     let (hosts, set_hosts) = signal(Vec::<serde_json::Value>::new());
-
     let (loading, set_loading) = signal(true);
+    let toast = ToastCtx::use_();
 
     wasm_bindgen_futures::spawn_local(async move {
         if let Ok(val) = api::get::<serde_json::Value>("/hosts").await {
@@ -35,40 +37,61 @@ pub fn DiscoverPage() -> impl IntoView {
                     }.into_any()
                 } else {
                     view! {
-                        {h.into_iter().enumerate().map(|(i, host)| {
-                            let uid = host.get("user_id").and_then(|v| v.as_i64()).unwrap_or(i as i64);
-                            let lang = host.get("languages").and_then(|v| v.as_str()).unwrap_or("N/A").to_string();
-                            let rate = host.get("hourly_rate").and_then(|v| v.as_i64()).unwrap_or(0);
-                            let rating = host.get("rating").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                            let available = host.get("available").and_then(|v| v.as_bool()).unwrap_or(false);
-                            let colors = ["#7856ff", "#1d9bf0", "#f91880", "#00ba7c"];
-                            let color = colors[i % colors.len()];
-                            view! {
-                                <div class="item-card">
-                                    <div class="avatar avatar-lg" style={format!("background:{}", color)}>
-                                        {format!("H{}", uid)}
-                                    </div>
-                                    <div class="item-info" style="flex:1;">
-                                        <div class="item-name">{format!("Host #{uid}")}</div>
-                                        <div class="item-meta">
-                                            {format!("{lang} \u{00B7} \u{2B50} {rating:.1} \u{00B7} {rate} YSH/hr")}
+                        <div class="item-grid">
+                            {h.into_iter().enumerate().map(|(i, host)| {
+                                let uid = host.get("user_id").and_then(|v| v.as_i64()).unwrap_or(i as i64);
+                                let lang = host.get("languages").and_then(|v| v.as_str()).unwrap_or("N/A").to_string();
+                                let rate = host.get("hourly_rate").and_then(|v| v.as_i64()).unwrap_or(0);
+                                let rating = host.get("rating").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                                let available = host.get("available").and_then(|v| v.as_bool()).unwrap_or(false);
+                                let colors = ["#7856ff", "#1d9bf0", "#f91880", "#00ba7c"];
+                                let color = colors[i % colors.len()];
+                                let surprise = toast;
+                                let h_uid = uid;
+                                let w_uid = uid;
+                                view! {
+                                    <div class="item-card">
+                                        <div class="avatar avatar-lg" style={format!("background:{}", color)}>
+                                            {format!("H{}", uid)}
                                         </div>
-                                        <div style="margin-top:4px;">
-                                            {if available {
-                                                view! { <span class="badge badge-success">"Online"</span> }.into_any()
-                                            } else {
-                                                view! { <span class="badge" style="color:var(--text-dim);">"Offline"</span> }.into_any()
-                                            }}
+                                        <div class="item-info" style="flex:1;">
+                                            <div class="item-name">{format!("Host #{uid}")}</div>
+                                            <div class="item-meta">
+                                                {format!("{lang} \u{00B7} \u{2B50} {rating:.1} \u{00B7} {rate} YSH/hr")}
+                                            </div>
+                                            <div style="margin-top:4px;">
+                                                {if available {
+                                                    view! { <span class="badge badge-success">"Online"</span> }.into_any()
+                                                } else {
+                                                    view! { <span class="badge" style="color:var(--text-dim);">"Offline"</span> }.into_any()
+                                                }}
+                                            </div>
+                                        </div>
+                                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+                                            <button class="btn btn-outline btn-sm" on:click=move |_| {
+                                                api::go(&format!("/stream?host={}", w_uid));
+                                            }>
+                                                "Watch"
+                                            </button>
+                                            <button class="btn btn-outline btn-sm"
+                                                on:click=move |_| {
+                                                    let tid = h_uid;
+                                                    let toast = surprise;
+                                                    spawn_local(async move {
+                                                        let req = serde_json::json!({"user_id": tid});
+                                                        match api::post::<serde_json::Value>("/chat/session", &req).await {
+                                                            Ok(_) => { toast.success("Chat started!"); api::go("/chat"); }
+                                                            Err(e) => toast.error(format!("Failed: {e}")),
+                                                        }
+                                                });
+                                            }>
+                                                "\u{1F4AC} Message"
+                                            </button>
                                         </div>
                                     </div>
-                                    <button class="btn btn-outline btn-sm" on:click=move |_| {
-                                        api::go(&format!("/stream?host={uid}"));
-                                    }>
-                                        "Watch"
-                                    </button>
-                                </div>
-                            }
-                        }).collect_view()}
+                                }
+                            }).collect_view()}
+                        </div>
                     }.into_any()
                 }
             }

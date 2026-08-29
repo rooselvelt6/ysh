@@ -1,10 +1,12 @@
 use leptos::prelude::*;
 use crate::api;
+use crate::components::ui::toast::ToastCtx;
 
 #[component]
 pub fn NotificationsPage() -> impl IntoView {
     let (notifs, set_notifs) = signal(Vec::<serde_json::Value>::new());
     let (loading, set_loading) = signal(true);
+    let toast = ToastCtx::use_();
 
     wasm_bindgen_futures::spawn_local(async move {
         if let Ok(val) = api::get::<serde_json::Value>("/notifications").await {
@@ -17,7 +19,10 @@ pub fn NotificationsPage() -> impl IntoView {
 
     let mark_all_read = move |_: leptos::ev::MouseEvent| {
         wasm_bindgen_futures::spawn_local(async move {
-            let _ = api::post::<serde_json::Value>("/notifications/read-all", &serde_json::json!({})).await;
+            match api::post::<serde_json::Value>("/notifications/read-all", &serde_json::json!({})).await {
+                Ok(_) => toast.success("All marked as read"),
+                Err(e) => toast.error(format!("Failed: {e}")),
+            }
             if let Ok(val) = api::get::<serde_json::Value>("/notifications").await {
                 if let Some(arr) = val.get("notifications").and_then(|v| v.as_array()) {
                     set_notifs.set(arr.clone());
