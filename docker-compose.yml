@@ -26,6 +26,8 @@ services:
       YSH_ENCRYPTION_KEY: ${YSH_ENCRYPTION_KEY:?set en .env}
       # base de datos en volumen persistente
       YSH_DATABASE_URL: sqlite:///data/ysh.db
+      # usuario a promover a admin en arranque (opcional, p. ej. "tdy")
+      YSH_BOOT_ADMIN: ${YSH_BOOT_ADMIN:-}
       # observabilidad
       YSH_LOG_JSON: "1"
       # cargo/worker sizing

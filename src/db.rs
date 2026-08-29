@@ -883,6 +883,14 @@ impl Database {
         Ok(())
     }
 
+    pub fn set_user_role(&self, user_id: i64, role: &str) -> Result<()> {
+        if let Some(mut user) = self.find_user_by_id(user_id)? {
+            user.role = role.to_string();
+            self.put_json(T_USER, &user_id.to_string(), &user)?;
+        }
+        Ok(())
+    }
+
     pub fn set_totp_secret(&self, user_id: i64, secret: &str) -> Result<()> {
         if let Some(mut user) = self.find_user_by_id(user_id)? {
             user.totp_secret = Some(secret.to_string());

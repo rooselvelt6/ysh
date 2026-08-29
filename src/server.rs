@@ -258,6 +258,10 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/admin/stats", get(crate::api::admin::platform_stats))
         .route(
+            "/admin/user/{user_id}/role",
+            post(crate::api::admin::set_role),
+        )
+        .route(
             "/admin/user/{user_id}/shadow-ban",
             post(crate::api::moderation::shadow_ban_user),
         )

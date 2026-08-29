@@ -82,7 +82,24 @@ async fn main() -> Result<()> {
     );
 
     tracing::info!("Initializing database...");
-    let db = std::sync::Arc::new(db::Database::new("ysh.db")?);
+    let db_url = ysh_config.database.url.clone();
+    let db_path = db_url
+        .strip_prefix("sqlite://")
+        .unwrap_or(&db_url)
+        .to_string();
+    let db = std::sync::Arc::new(db::Database::new(&db_path)?);
+    tracing::info!("Database initialized at {db_path}");
+    if let Ok(boot_admin) = std::env::var("YSH_BOOT_ADMIN")
+        && !boot_admin.trim().is_empty()
+    {
+        let username = boot_admin.trim();
+        if let Ok(Some(user)) = db.find_user_by_username(username) {
+            db.set_user_role(user.id, "admin")?;
+            tracing::info!("Bootstrapped admin role for user '{username}' (id={})", user.id);
+        } else {
+            tracing::warn!("YSH_BOOT_ADMIN set but user '{username}' not found");
+        }
+    }
     tracing::info!("Database initialized");
 
     tracing::info!("Initializing cache...");

@@ -90,3 +90,34 @@ pub async fn platform_stats(
 
     Ok(Json(stats))
 }
+
+pub async fn set_role(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(user_id): Path<i64>,
+    Json(req): Json<std::collections::HashMap<String, String>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    require_admin(&auth)?;
+
+    let role = req
+        .get("role")
+        .cloned()
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "Missing 'role'".into()))?;
+    if role != "user" && role != "admin" && role != "moderator" && role != "host" {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Invalid role (user|admin|moderator|host)".into(),
+        ));
+    }
+
+    state
+        .db
+        .set_user_role(user_id, &role)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({
+        "message": "Role updated",
+        "user_id": user_id,
+        "role": role,
+    })))
+}
