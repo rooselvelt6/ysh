@@ -44,6 +44,9 @@ WORKDIR /app
 # Binario compilado
 COPY --from=builder /build/target/release/ysh /app/ysh
 
+# Frontend WASM (SPA) — se sirve en / desde /app/frontend/dist
+COPY frontend/dist /app/frontend/dist
+
 # Config (default.toml gestiona secrets por env)
 COPY config/default.toml /app/config/default.toml
 
