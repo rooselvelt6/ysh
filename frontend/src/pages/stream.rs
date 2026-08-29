@@ -36,17 +36,28 @@ pub fn StreamPage() -> impl IntoView {
     let (local_video_url, set_local_video_url) = signal(Option::<String>::None);
     let (duration, set_duration) = signal(0u32);
 
-    // Acquire local media
+    // Acquire local media on demand (only when starting a call), requesting
+    // only the devices needed for the selected call type. Avoids failing when
+    // the machine has no camera/microphone.
     let acquire_media = {
         let set_local_video_url = set_local_video_url.clone();
         let set_error_msg = set_error_msg.clone();
-        move || {
-            let window = web_sys::window().unwrap();
+        move |want_video: bool| {
+            let window = match web_sys::window() {
+                Some(w) => w,
+                None => return,
+            };
             let navigator = window.navigator();
-            let media_devices = navigator.media_devices().unwrap();
+            let media_devices = match navigator.media_devices() {
+                Ok(md) => md,
+                Err(_) => {
+                    set_error_msg.set(Some("Media devices not supported by this browser".into()));
+                    return;
+                }
+            };
             let constraints = web_sys::MediaStreamConstraints::new();
             constraints.set_audio(&JsValue::from_bool(true));
-            constraints.set_video(&JsValue::from_bool(true));
+            constraints.set_video(&JsValue::from_bool(want_video));
 
             let local_video_url2 = set_local_video_url.clone();
             let set_error_msg2 = set_error_msg.clone();
@@ -60,7 +71,10 @@ pub fn StreamPage() -> impl IntoView {
             }) as Box<dyn FnMut(JsValue)>);
 
             let error_cb = Closure::wrap(Box::new(move |err: JsValue| {
-                set_error_msg2.set(Some(format!("Media error: {:?}", err)));
+                set_error_msg2.set(Some(format!(
+                    "Media error: {:?}. Ensure a camera/microphone is connected and permissions granted.",
+                    err
+                )));
             }) as Box<dyn FnMut(JsValue)>);
 
             let _ = media_devices.get_user_media_with_constraints(&constraints)
@@ -72,13 +86,6 @@ pub fn StreamPage() -> impl IntoView {
         }
     };
 
-    // Acquire media on mount
-    let acquired = std::rc::Rc::new(std::cell::Cell::new(false));
-    if !acquired.get() {
-        acquired.set(true);
-        acquire_media();
-    }
-
     // Start call
     let start_call = {
         let set_call_state = set_call_state.clone();
@@ -87,6 +94,7 @@ pub fn StreamPage() -> impl IntoView {
         let set_error_msg = set_error_msg.clone();
         let set_status_msg = set_status_msg.clone();
         let set_remote_video_url = set_remote_video_url.clone();
+        let set_local_video_url = set_local_video_url.clone();
         move |_: leptos::ev::MouseEvent| {
             let target_id: i64 = match peer_id_input.get().trim().parse() {
                 Ok(id) => id,
@@ -106,6 +114,21 @@ pub fn StreamPage() -> impl IntoView {
                 set_call_state.set(CallState::Idle);
                 return;
             }
+
+            let call_type_str = call_type.get();
+            // Request only the devices we need (video+audio or audio-only).
+            // Reset any previously acquired stream when reusing the page.
+            LOCAL_STREAM.with(|s| {
+                if let Some(stream) = s.borrow_mut().take() {
+                    for i in 0..stream.get_tracks().length() {
+                        if let Some(track) = stream.get_tracks().get(i).dyn_ref::<web_sys::MediaStreamTrack>() {
+                            track.stop();
+                        }
+                    }
+                }
+            });
+            set_local_video_url.set(None);
+            acquire_media(call_type_str == "video");
 
             // Create RTCPeerConnection with public STUN servers
             let rtc_config = web_sys::RtcConfiguration::new();

@@ -1,0 +1,15 @@
+{
+  "name": "ysh-frontend",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "ysh_frontend_bg.wasm",
+    "ysh_frontend.js",
+    "ysh_frontend.d.ts"
+  ],
+  "main": "ysh_frontend.js",
+  "types": "ysh_frontend.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
