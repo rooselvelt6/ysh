@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
-    Json,
 };
 
 use crate::auth::jwt::AuthUser;
@@ -30,10 +30,7 @@ pub async fn get_moderation_queue(
     require_admin(&auth)?;
 
     let status = params.get("status").map(|s| s.as_str());
-    let items = state
-        .db
-        .get_moderation_queue(status)
-        .map_err(|e| err(&e))?;
+    let items = state.db.get_moderation_queue(status).map_err(|e| err(&e))?;
 
     Ok(Json(serde_json::json!({
         "queue": items,
@@ -50,10 +47,7 @@ pub async fn resolve_moderation_item(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     require_admin(&auth)?;
 
-    let status = req["status"]
-        .as_str()
-        .unwrap_or("reviewed")
-        .to_string();
+    let status = req["status"].as_str().unwrap_or("reviewed").to_string();
 
     state
         .db
@@ -81,7 +75,9 @@ pub async fn list_reports(
     let status = params.get("status").map(|s| s.as_str());
     let reports = state.db.get_reports(status).map_err(|e| err(&e))?;
 
-    Ok(Json(serde_json::json!({ "reports": reports, "count": reports.len() })))
+    Ok(Json(
+        serde_json::json!({ "reports": reports, "count": reports.len() }),
+    ))
 }
 
 pub async fn resolve_report(
@@ -126,7 +122,9 @@ pub async fn list_content_flags(
     let status = params.get("status").map(|s| s.as_str());
     let flags = state.db.get_content_flags(status).map_err(|e| err(&e))?;
 
-    Ok(Json(serde_json::json!({ "flags": flags, "count": flags.len() })))
+    Ok(Json(
+        serde_json::json!({ "flags": flags, "count": flags.len() }),
+    ))
 }
 
 pub async fn resolve_content_flag(
@@ -166,7 +164,9 @@ pub async fn list_appeals(
     let status = params.get("status").map(|s| s.as_str());
     let appeals = state.db.get_appeals(status).map_err(|e| err(&e))?;
 
-    Ok(Json(serde_json::json!({ "appeals": appeals, "count": appeals.len() })))
+    Ok(Json(
+        serde_json::json!({ "appeals": appeals, "count": appeals.len() }),
+    ))
 }
 
 pub async fn resolve_appeal(
@@ -226,10 +226,7 @@ pub async fn unshadow_ban_user(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     require_admin(&auth)?;
 
-    let removed = state
-        .db
-        .unshadow_ban_user(user_id)
-        .map_err(|e| err(&e))?;
+    let removed = state.db.unshadow_ban_user(user_id).map_err(|e| err(&e))?;
 
     Ok(Json(serde_json::json!({
         "message": "Shadow ban lifted",
@@ -245,7 +242,9 @@ pub async fn list_shadow_bans(
     require_admin(&auth)?;
 
     let bans = state.db.get_shadow_bans().map_err(|e| err(&e))?;
-    Ok(Json(serde_json::json!({ "shadow_bans": bans, "count": bans.len() })))
+    Ok(Json(
+        serde_json::json!({ "shadow_bans": bans, "count": bans.len() }),
+    ))
 }
 
 // ═══════════════════════════════════════════
@@ -323,11 +322,7 @@ pub async fn moderation_stats(
         .get_content_flags(Some("pending"))
         .map_err(|e| err(&e))?
         .len();
-    let active_shadow_bans = state
-        .db
-        .active_shadow_ban_ids()
-        .map_err(|e| err(&e))?
-        .len();
+    let active_shadow_bans = state.db.active_shadow_ban_ids().map_err(|e| err(&e))?.len();
 
     Ok(Json(serde_json::json!({
         "pending_queue": pending_queue,

@@ -1,4 +1,4 @@
-use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef};
+use ractor::{Actor, ActorProcessingErr, ActorRef, async_trait};
 
 pub struct SessionSupervisor;
 
@@ -18,10 +18,7 @@ impl Actor for SessionSupervisor {
         _myself: ActorRef<Self::Msg>,
         max_sessions: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        tracing::info!(
-            "SessionSupervisor starting, max_sessions: {}",
-            max_sessions
-        );
+        tracing::info!("SessionSupervisor starting, max_sessions: {}", max_sessions);
         Ok(SessionSupervisorState {
             active_sessions: 0,
             max_sessions,

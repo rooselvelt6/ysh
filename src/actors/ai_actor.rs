@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef};
+use ractor::{Actor, ActorProcessingErr, ActorRef, async_trait};
 
 use crate::ai::{AIEngine, ModerateRequest};
 
@@ -68,5 +68,7 @@ pub enum AIActorMsg {
         content_id: String,
         content: Option<String>,
     },
-    DeepfakeCheck { user_id: String },
+    DeepfakeCheck {
+        user_id: String,
+    },
 }

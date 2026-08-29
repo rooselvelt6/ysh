@@ -36,12 +36,18 @@ pub fn optimize(
         .collect();
 
     for _ in 0..cfg.genetic_generations {
-        population.sort_by(|a, b| b.fitness.partial_cmp(&a.fitness).unwrap_or(std::cmp::Ordering::Equal));
+        population.sort_by(|a, b| {
+            b.fitness
+                .partial_cmp(&a.fitness)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         let mut new_pop = Vec::with_capacity(cfg.genetic_population_size);
         while new_pop.len() < cfg.genetic_population_size {
             // tournament selection
-            let p1 = population[next_rand() as usize % cfg.genetic_population_size.min(population.len())].clone();
+            let p1 = population
+                [next_rand() as usize % cfg.genetic_population_size.min(population.len())]
+            .clone();
             let idx = next_rand() as usize % cfg.genetic_population_size.min(population.len());
             let p2 = population[idx].clone();
 
@@ -67,7 +73,11 @@ pub fn optimize(
 
     population
         .into_iter()
-        .max_by(|a, b| a.fitness.partial_cmp(&b.fitness).unwrap_or(std::cmp::Ordering::Equal))
+        .max_by(|a, b| {
+            a.fitness
+                .partial_cmp(&b.fitness)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
         .unwrap_or(Individual {
             genome: vec![0.0; dims],
             fitness: 0.0,

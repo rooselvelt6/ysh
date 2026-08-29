@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 #[derive(Clone)]
@@ -28,12 +28,12 @@ impl CircuitBreaker {
         }
 
         let last = self.last_failure.lock().unwrap();
-        if let Some(failure_time) = *last {
-            if failure_time.elapsed() >= self.recovery_timeout {
-                self.is_open.store(false, Ordering::SeqCst);
-                self.failure_count.store(0, Ordering::SeqCst);
-                return true;
-            }
+        if let Some(failure_time) = *last
+            && failure_time.elapsed() >= self.recovery_timeout
+        {
+            self.is_open.store(false, Ordering::SeqCst);
+            self.failure_count.store(0, Ordering::SeqCst);
+            return true;
         }
         false
     }

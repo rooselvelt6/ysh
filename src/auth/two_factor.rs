@@ -1,4 +1,4 @@
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{Json, extract::State, http::StatusCode};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 
@@ -31,8 +31,7 @@ pub async fn setup_2fa(
     let (secret_bytes, secret_base32) = totp::generate_secret();
     let uri = totp::generate_uri(&secret_base32, &user.email, "YSH");
 
-    let encoded_secret =
-        base64::engine::general_purpose::STANDARD.encode(&secret_bytes);
+    let encoded_secret = base64::engine::general_purpose::STANDARD.encode(secret_bytes);
     state
         .db
         .set_totp_secret(user_id, &encoded_secret)

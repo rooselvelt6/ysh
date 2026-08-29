@@ -182,7 +182,8 @@ mod chat_tests {
 
         let msg_id = db.send_message(sid, u1, "Hello!", "text", false).unwrap();
         assert!(msg_id > 0);
-        db.send_message(sid, u2, "Hi there!", "text", false).unwrap();
+        db.send_message(sid, u2, "Hi there!", "text", false)
+            .unwrap();
 
         let messages = db.get_messages(sid, 50, None).unwrap();
         assert_eq!(messages.len(), 2);
@@ -249,7 +250,8 @@ mod chat_tests {
         let u2 = create_test_user(&db, "enc_receiver");
         let sid = db.create_chat_session("direct", &[u1, u2]).unwrap();
 
-        db.send_message(sid, u1, "encrypted_content", "text", true).unwrap();
+        db.send_message(sid, u1, "encrypted_content", "text", true)
+            .unwrap();
         let messages = db.get_messages(sid, 50, None).unwrap();
         assert_eq!(messages[0]["encrypted"], true);
     }
@@ -263,7 +265,9 @@ mod chat_tests {
 
         let mut last_id = 0;
         for i in 0..10 {
-            last_id = db.send_message(sid, u1, &format!("msg_{}", i), "text", false).unwrap();
+            last_id = db
+                .send_message(sid, u1, &format!("msg_{}", i), "text", false)
+                .unwrap();
         }
 
         let messages = db.get_messages(sid, 3, None).unwrap();
@@ -416,8 +420,10 @@ mod notification_tests {
     fn create_and_list_notifications() {
         let db = test_db();
         let id = create_test_user(&db, "notif_user");
-        db.create_notification(id, "test", "Title", "Body", "{}", "in_app").unwrap();
-        db.create_notification(id, "gift", "Gift!", "You got a gift", "{}", "in_app").unwrap();
+        db.create_notification(id, "test", "Title", "Body", "{}", "in_app")
+            .unwrap();
+        db.create_notification(id, "gift", "Gift!", "You got a gift", "{}", "in_app")
+            .unwrap();
 
         let notifs = db.get_notifications(id, 10).unwrap();
         assert_eq!(notifs.len(), 2);
@@ -427,7 +433,9 @@ mod notification_tests {
     fn mark_notification_read() {
         let db = test_db();
         let id = create_test_user(&db, "read_user");
-        let nid = db.create_notification(id, "test", "T", "B", "{}", "in_app").unwrap();
+        let nid = db
+            .create_notification(id, "test", "T", "B", "{}", "in_app")
+            .unwrap();
 
         db.mark_notification_read(id, nid).unwrap();
         let notifs = db.get_notifications(id, 10).unwrap();
@@ -438,8 +446,10 @@ mod notification_tests {
     fn mark_all_read() {
         let db = test_db();
         let id = create_test_user(&db, "readall_user");
-        db.create_notification(id, "test", "T1", "B1", "{}", "in_app").unwrap();
-        db.create_notification(id, "test", "T2", "B2", "{}", "in_app").unwrap();
+        db.create_notification(id, "test", "T1", "B1", "{}", "in_app")
+            .unwrap();
+        db.create_notification(id, "test", "T2", "B2", "{}", "in_app")
+            .unwrap();
 
         let count = db.mark_all_read(id).unwrap();
         assert_eq!(count, 2);
@@ -453,7 +463,8 @@ mod notification_tests {
         assert_eq!(prefs["email_enabled"], true);
         assert_eq!(prefs["email_marketing"], false);
 
-        db.update_notification_preference(id, "email_marketing", true).unwrap();
+        db.update_notification_preference(id, "email_marketing", true)
+            .unwrap();
         let prefs = db.get_notification_preference(id).unwrap();
         assert_eq!(prefs["email_marketing"], true);
     }
@@ -649,7 +660,8 @@ mod i18n_override_tests {
         assert!(db.get_i18n_override("es", "nav-wallet").unwrap().is_none());
         assert!(db.list_i18n_overrides().unwrap().is_empty());
 
-        db.set_i18n_override("es", "nav-wallet", "Mi Cartera").unwrap();
+        db.set_i18n_override("es", "nav-wallet", "Mi Cartera")
+            .unwrap();
         assert_eq!(
             db.get_i18n_override("es", "nav-wallet").unwrap().unwrap(),
             "Mi Cartera"
@@ -663,7 +675,8 @@ mod i18n_override_tests {
         assert_eq!(all[0].1, "Mi Cartera");
 
         // Overwrite existing.
-        db.set_i18n_override("es", "nav-wallet", "Cartera 2").unwrap();
+        db.set_i18n_override("es", "nav-wallet", "Cartera 2")
+            .unwrap();
         assert_eq!(
             db.get_i18n_override("es", "nav-wallet").unwrap().unwrap(),
             "Cartera 2"

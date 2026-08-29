@@ -28,7 +28,10 @@ mod password_tests {
     #[test]
     fn hash_is_argon2id_format() {
         let hash = hash_password("test").unwrap();
-        assert!(hash.starts_with("$argon2id$"), "Hash should be Argon2id format");
+        assert!(
+            hash.starts_with("$argon2id$"),
+            "Hash should be Argon2id format"
+        );
     }
 
     #[test]
@@ -91,8 +94,8 @@ mod password_tests {
 #[cfg(test)]
 mod totp_tests {
     use ysh::security::totp::{
-        base32_encode, generate_recovery_codes, generate_secret, generate_uri,
-        hash_recovery_code, verify_code, verify_recovery_code,
+        base32_encode, generate_recovery_codes, generate_secret, generate_uri, hash_recovery_code,
+        verify_code, verify_recovery_code,
     };
 
     #[test]
@@ -144,7 +147,7 @@ mod totp_tests {
         let time_step = now / 30;
 
         use hmac::Mac;
-        let mut mac = <hmac::Hmac::<sha1::Sha1> as hmac::Mac>::new_from_slice(&secret).unwrap();
+        let mut mac = <hmac::Hmac<sha1::Sha1> as hmac::Mac>::new_from_slice(&secret).unwrap();
         mac.update(&time_step.to_be_bytes());
         let result = mac.finalize().into_bytes();
         let offset = (result[19] & 0x0f) as usize;
@@ -185,7 +188,12 @@ mod totp_tests {
         let codes = generate_recovery_codes(5);
         for code in &codes {
             let parts: Vec<&str> = code.split('-').collect();
-            assert_eq!(parts.len(), 3, "Recovery code should have 3 parts: {}", code);
+            assert_eq!(
+                parts.len(),
+                3,
+                "Recovery code should have 3 parts: {}",
+                code
+            );
         }
     }
 
@@ -194,7 +202,11 @@ mod totp_tests {
         let codes = generate_recovery_codes(100);
         let mut set = std::collections::HashSet::new();
         for code in &codes {
-            assert!(set.insert(code.clone()), "Duplicate recovery code: {}", code);
+            assert!(
+                set.insert(code.clone()),
+                "Duplicate recovery code: {}",
+                code
+            );
         }
     }
 

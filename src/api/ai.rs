@@ -1,14 +1,10 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Json,
-};
+use axum::{Json, extract::State, http::StatusCode};
 
 use crate::ai::{
+    ModerateRequest, ModerationDecision,
     anomaly::StreamingAnomalyDetector,
-    matching::{vectorize, MatchFeatures},
+    matching::{MatchFeatures, vectorize},
     network::Weights,
-    ModerationDecision, ModerateRequest,
 };
 use crate::auth::jwt::AuthUser;
 use crate::server::AppState;
@@ -26,10 +22,12 @@ pub async fn moderate_text(
     });
 
     if moderation.decision == ModerationDecision::Block {
-        let _ = state.ai_actor.send_message(crate::actors::ai_actor::AIActorMsg::Moderate {
-            content_id: author_id.to_string(),
-            content: Some(content.to_string()),
-        });
+        let _ = state
+            .ai_actor
+            .send_message(crate::actors::ai_actor::AIActorMsg::Moderate {
+                content_id: author_id.to_string(),
+                content: Some(content.to_string()),
+            });
     }
 
     Ok(Json(serde_json::json!({
@@ -47,11 +45,7 @@ pub async fn anomaly_score(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let features: Vec<f64> = req["features"]
         .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_f64())
-                .collect()
-        })
+        .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
         .unwrap_or_default();
 
     if features.is_empty() {
@@ -72,11 +66,20 @@ pub async fn match_score(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let a: Vec<f64> = req["a"].as_array().map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect()).unwrap_or_default();
-    let b: Vec<f64> = req["b"].as_array().map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect()).unwrap_or_default();
+    let a: Vec<f64> = req["a"]
+        .as_array()
+        .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
+        .unwrap_or_default();
+    let b: Vec<f64> = req["b"]
+        .as_array()
+        .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
+        .unwrap_or_default();
 
     if a.len() != b.len() || a.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "a and b must be equal-length feature vectors".into()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "a and b must be equal-length feature vectors".into(),
+        ));
     }
 
     let score = state.ai_engine.match_score(&a, &b);
@@ -88,7 +91,10 @@ pub async fn neural_predict(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let input: Vec<f64> = req["input"].as_array().map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect()).unwrap_or_default();
+    let input: Vec<f64> = req["input"]
+        .as_array()
+        .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
+        .unwrap_or_default();
     if input.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "input array required".into()));
     }
@@ -114,7 +120,7 @@ pub async fn optimize_genetic(
 
     let best = state
         .ai_engine
-        .genetic_optimize(|g| g.iter().sum::<f64>(), dims,);
+        .genetic_optimize(|g| g.iter().sum::<f64>(), dims);
 
     Ok(Json(serde_json::json!({
         "best_genome": best.genome,
@@ -161,10 +167,7 @@ pub async fn neural_train(
                 .filter_map(|s| {
                     let input = s["input"].as_array()?;
                     let target = s["target"].as_f64()?;
-                    Some((
-                        input.iter().filter_map(|v| v.as_f64()).collect(),
-                        target,
-                    ))
+                    Some((input.iter().filter_map(|v| v.as_f64()).collect(), target))
                 })
                 .collect()
         })
@@ -173,13 +176,13 @@ pub async fn neural_train(
     if samples.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "samples array required".into()));
     }
-    if let Some((first, _)) = samples.first() {
-        if samples.iter().any(|(inp, _)| inp.len() != first.len()) {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                "all sample inputs must have the same length".into(),
-            ));
-        }
+    if let Some((first, _)) = samples.first()
+        && samples.iter().any(|(inp, _)| inp.len() != first.len())
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "all sample inputs must have the same length".into(),
+        ));
     }
 
     let n_in = samples[0].0.len();

@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 
 use crate::auth::jwt::AuthUser;
@@ -12,9 +12,10 @@ pub async fn create_agency(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let name = req["name"]
         .as_str()
@@ -74,9 +75,10 @@ pub async fn add_member(
     Path(agency_id): Path<i64>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let _owner_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let _owner_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let target_user_id = req["user_id"]
         .as_i64()

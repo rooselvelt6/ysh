@@ -28,10 +28,7 @@ impl Cache {
     }
 
     pub fn set_with_ttl(&self, key: &str, value: &[u8], ttl: Duration) -> Result<()> {
-        let expires_at = SystemTime::now()
-            .duration_since(UNIX_EPOCH)?
-            .as_secs()
-            + ttl.as_secs();
+        let expires_at = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() + ttl.as_secs();
         let entry = RawEntry {
             value: value.to_vec(),
             expires_at: Some(expires_at),
@@ -46,9 +43,7 @@ impl Cache {
             Some(data) => {
                 let entry = deserialize(&data)?;
                 if let Some(expires_at) = entry.expires_at {
-                    let now = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)?
-                        .as_secs();
+                    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
                     if now > expires_at {
                         self.db.remove(key.as_bytes())?;
                         return Ok(None);
@@ -87,9 +82,7 @@ impl Cache {
             Some(data) => {
                 let entry = deserialize(&data)?;
                 if let Some(expires_at) = entry.expires_at {
-                    let now = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)?
-                        .as_secs();
+                    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
                     if now > expires_at {
                         self.db.remove(key.as_bytes())?;
                         return Ok(false);
@@ -142,10 +135,7 @@ impl Cache {
 
     #[allow(dead_code)]
     pub fn increment_with_ttl(&self, key: &str, ttl: Duration) -> Result<u64> {
-        let expires_at = SystemTime::now()
-            .duration_since(UNIX_EPOCH)?
-            .as_secs()
-            + ttl.as_secs();
+        let expires_at = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() + ttl.as_secs();
         let new_val = self
             .db
             .fetch_and_update(key.as_bytes(), |old| {
@@ -156,10 +146,10 @@ impl Cache {
                             .duration_since(UNIX_EPOCH)
                             .unwrap_or_default()
                             .as_secs();
-                        if let Some(exp) = e.expires_at {
-                            if now > exp {
-                                return None;
-                            }
+                        if let Some(exp) = e.expires_at
+                            && now > exp
+                        {
+                            return None;
                         }
                         String::from_utf8(e.value).ok()?.parse::<u64>().ok()
                     })
@@ -190,11 +180,9 @@ impl Cache {
 
     pub fn stats(&self) -> CacheStats {
         let mut stats = CacheStats::default();
-        for item in self.db.iter() {
-            if let Ok((_key, val)) = item {
-                stats.total_entries += 1;
-                stats.total_bytes += val.len() as u64;
-            }
+        for (_key, val) in self.db.iter().flatten() {
+            stats.total_entries += 1;
+            stats.total_bytes += val.len() as u64;
         }
         stats
     }
@@ -237,7 +225,11 @@ fn deserialize(data: &[u8]) -> Result<RawEntry> {
     pos += 4;
 
     if data.len() < pos + val_len + 1 {
-        anyhow::bail!("Cache entry corrupted: val_len={} but only {} bytes remain", val_len, data.len() - pos);
+        anyhow::bail!(
+            "Cache entry corrupted: val_len={} but only {} bytes remain",
+            val_len,
+            data.len() - pos
+        );
     }
 
     let value = data[pos..pos + val_len].to_vec();
@@ -250,17 +242,12 @@ fn deserialize(data: &[u8]) -> Result<RawEntry> {
         if data.len() < pos + 8 {
             anyhow::bail!("Cache entry truncated: missing expiry bytes");
         }
-        Some(u64::from_le_bytes(
-            data[pos..pos + 8].try_into()?,
-        ))
+        Some(u64::from_le_bytes(data[pos..pos + 8].try_into()?))
     } else {
         None
     };
 
-    Ok(RawEntry {
-        value,
-        expires_at,
-    })
+    Ok(RawEntry { value, expires_at })
 }
 
 pub struct SessionCache {
@@ -277,12 +264,7 @@ impl SessionCache {
     }
 
     #[allow(dead_code)]
-    pub fn store_session(
-        &self,
-        session_id: &str,
-        user_id: &str,
-        ttl: Duration,
-    ) -> Result<()> {
+    pub fn store_session(&self, session_id: &str, user_id: &str, ttl: Duration) -> Result<()> {
         self.cache
             .set_string_with_ttl(&format!("session:{}", session_id), user_id, ttl)
     }
@@ -322,11 +304,7 @@ impl RateLimitCache {
         let current = self.cache.increment_with_ttl(&cache_key, window)?;
         Ok(RateLimitResult {
             allowed: current <= max_requests,
-            remaining: if current <= max_requests {
-                max_requests - current
-            } else {
-                0
-            },
+            remaining: max_requests.saturating_sub(current),
             limit: max_requests,
             retry_after: if current > max_requests {
                 Some(window)

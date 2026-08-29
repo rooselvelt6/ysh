@@ -68,10 +68,10 @@ pub fn verify_code(secret: &[u8], code: &str) -> bool {
 
     for offset in -1i64..=1 {
         let step = (time_step as i64 + offset) as u64;
-        if let Ok(c) = compute_code(secret, step) {
-            if c == code {
-                return true;
-            }
+        if let Ok(c) = compute_code(secret, step)
+            && c == code
+        {
+            return true;
         }
     }
     false

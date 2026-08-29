@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 
 use crate::actors::webrtc_actor::WebRTCActorMsg;
@@ -10,7 +10,9 @@ use crate::server::AppState;
 use crate::webrtc::{CallType, valid_simulcast_tier};
 
 fn parse_uid(auth: &AuthUser) -> Result<i64, (StatusCode, String)> {
-    auth.user_id.parse().map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))
+    auth.user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))
 }
 
 fn http_err(e: &anyhow::Error) -> (StatusCode, String) {
@@ -32,8 +34,11 @@ pub async fn start_call(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let caller_id = parse_uid(&auth)?;
     let _ = state.db.log_activity(caller_id, "call");
-    let call_type_s = req["call_type"].as_str().ok_or((StatusCode::BAD_REQUEST, "call_type required".into()))?;
-    let call_type = CallType::parse(call_type_s).ok_or((StatusCode::BAD_REQUEST, "Invalid call_type".into()))?;
+    let call_type_s = req["call_type"]
+        .as_str()
+        .ok_or((StatusCode::BAD_REQUEST, "call_type required".into()))?;
+    let call_type = CallType::parse(call_type_s)
+        .ok_or((StatusCode::BAD_REQUEST, "Invalid call_type".into()))?;
     if !state.config.webrtc.enabled {
         return Err((StatusCode::FORBIDDEN, "WebRTC streaming is disabled".into()));
     }
@@ -43,13 +48,21 @@ pub async fn start_call(
 
     let (callee_id, participant_ids) = match call_type {
         CallType::Flash => {
-            let peer = state.db.find_random_peer(caller_id).map_err(|e| http_err(&e))?
-                .ok_or((StatusCode::NOT_FOUND, "No available peer for flash call".into()))?;
+            let peer = state
+                .db
+                .find_random_peer(caller_id)
+                .map_err(|e| http_err(&e))?
+                .ok_or((
+                    StatusCode::NOT_FOUND,
+                    "No available peer for flash call".into(),
+                ))?;
             (peer, vec![caller_id, peer])
         }
         CallType::Live => (0, vec![caller_id]),
         CallType::P2P => {
-            let target = req["target_user_id"].as_i64().ok_or((StatusCode::BAD_REQUEST, "target_user_id required".into()))?;
+            let target = req["target_user_id"]
+                .as_i64()
+                .ok_or((StatusCode::BAD_REQUEST, "target_user_id required".into()))?;
             if target == caller_id {
                 return Err((StatusCode::BAD_REQUEST, "Cannot call yourself".into()));
             }
@@ -98,7 +111,11 @@ pub async fn join_call(
     Path(call_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let user_id = parse_uid(&auth)?;
-    if state.db.get_call_record(&call_id).map_err(|e| http_err(&e))?.is_none()
+    if state
+        .db
+        .get_call_record(&call_id)
+        .map_err(|e| http_err(&e))?
+        .is_none()
         && !{
             let rooms = state.webrtc_rooms.lock().await;
             rooms.room_exists(&call_id)
@@ -114,7 +131,10 @@ pub async fn join_call(
     }
     drop(rooms);
 
-    state.db.join_call(&call_id, user_id).map_err(|e| http_err(&e))?;
+    state
+        .db
+        .join_call(&call_id, user_id)
+        .map_err(|e| http_err(&e))?;
 
     Ok(Json(serde_json::json!({
         "call_id": call_id,
@@ -133,8 +153,13 @@ pub async fn leave_call(
     let mut rooms = state.webrtc_rooms.lock().await;
     if let Some(outcome) = rooms.leave(&call_id, user_id) {
         drop(rooms);
-        state.db.leave_call(&call_id, user_id).map_err(|e| http_err(&e))?;
-        Ok(Json(serde_json::json!({ "left": true, "room_empty": outcome.room_empty, "participants": outcome.participants, "viewer_count": outcome.viewer_count })))
+        state
+            .db
+            .leave_call(&call_id, user_id)
+            .map_err(|e| http_err(&e))?;
+        Ok(Json(
+            serde_json::json!({ "left": true, "room_empty": outcome.room_empty, "participants": outcome.participants, "viewer_count": outcome.viewer_count }),
+        ))
     } else {
         Err((StatusCode::NOT_FOUND, "Room not found".into()))
     }
@@ -147,9 +172,15 @@ pub async fn end_call(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let host_id = parse_uid(&auth)?;
     let mut rooms = state.webrtc_rooms.lock().await;
-    let room = rooms.get_room(&call_id).cloned().ok_or((StatusCode::NOT_FOUND, "Room not found".into()))?;
+    let room = rooms
+        .get_room(&call_id)
+        .cloned()
+        .ok_or((StatusCode::NOT_FOUND, "Room not found".into()))?;
     if room.host_id != host_id {
-        return Err((StatusCode::FORBIDDEN, "Only the host can end the call".into()));
+        return Err((
+            StatusCode::FORBIDDEN,
+            "Only the host can end the call".into(),
+        ));
     }
     rooms.end_room(&call_id);
     drop(rooms);
@@ -157,10 +188,15 @@ pub async fn end_call(
     let participants = room.participants.clone();
     state
         .webrtc_actor
-        .cast(WebRTCActorMsg::CallEnd { call_id: call_id.clone(), caller_id: room.host_id })
+        .cast(WebRTCActorMsg::CallEnd {
+            call_id: call_id.clone(),
+            caller_id: room.host_id,
+        })
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:#}", e)))?;
 
-    Ok(Json(serde_json::json!({ "ended": true, "call_id": call_id, "participants": participants })))
+    Ok(Json(
+        serde_json::json!({ "ended": true, "call_id": call_id, "participants": participants }),
+    ))
 }
 
 pub async fn toggle_screen_share(
@@ -170,15 +206,23 @@ pub async fn toggle_screen_share(
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let user_id = parse_uid(&auth)?;
-    let active = req["active"].as_bool().ok_or((StatusCode::BAD_REQUEST, "active required".into()))?;
+    let active = req["active"]
+        .as_bool()
+        .ok_or((StatusCode::BAD_REQUEST, "active required".into()))?;
 
     let mut rooms = state.webrtc_rooms.lock().await;
-    rooms.set_screen_share(&call_id, user_id, active).map_err(|e| (StatusCode::CONFLICT, e))?;
+    rooms
+        .set_screen_share(&call_id, user_id, active)
+        .map_err(|e| (StatusCode::CONFLICT, e))?;
     drop(rooms);
 
     state
         .webrtc_actor
-        .cast(WebRTCActorMsg::ScreenShare { call_id: call_id.clone(), user_id, active })
+        .cast(WebRTCActorMsg::ScreenShare {
+            call_id: call_id.clone(),
+            user_id,
+            active,
+        })
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:#}", e)))?;
 
     Ok(Json(serde_json::json!({ "screen_share": active })))
@@ -196,12 +240,16 @@ pub async fn start_recording(
 
     {
         let mut rooms = state.webrtc_rooms.lock().await;
-        rooms.set_recording(&call_id, true, state.config.webrtc.recording_encryption).map_err(|e| (StatusCode::CONFLICT, e))?;
+        rooms
+            .set_recording(&call_id, true, state.config.webrtc.recording_encryption)
+            .map_err(|e| (StatusCode::CONFLICT, e))?;
     }
 
     state
         .webrtc_actor
-        .cast(WebRTCActorMsg::RecordingStart { call_id: call_id.clone() })
+        .cast(WebRTCActorMsg::RecordingStart {
+            call_id: call_id.clone(),
+        })
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:#}", e)))?;
 
     let _ = user_id;
@@ -218,16 +266,26 @@ pub async fn stop_recording(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let host_id = parse_uid(&auth)?;
     let mut rooms = state.webrtc_rooms.lock().await;
-    let room = rooms.get_room(&call_id).cloned().ok_or((StatusCode::NOT_FOUND, "Room not found".into()))?;
+    let room = rooms
+        .get_room(&call_id)
+        .cloned()
+        .ok_or((StatusCode::NOT_FOUND, "Room not found".into()))?;
     if room.host_id != host_id {
-        return Err((StatusCode::FORBIDDEN, "Only the host can stop the recording".into()));
+        return Err((
+            StatusCode::FORBIDDEN,
+            "Only the host can stop the recording".into(),
+        ));
     }
-    rooms.set_recording(&call_id, false, false).map_err(|e| (StatusCode::CONFLICT, e))?;
+    rooms
+        .set_recording(&call_id, false, false)
+        .map_err(|e| (StatusCode::CONFLICT, e))?;
     drop(rooms);
 
     state
         .webrtc_actor
-        .cast(WebRTCActorMsg::RecordingStop { call_id: call_id.clone() })
+        .cast(WebRTCActorMsg::RecordingStop {
+            call_id: call_id.clone(),
+        })
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:#}", e)))?;
 
     Ok(Json(serde_json::json!({ "recording": false })))
@@ -267,13 +325,24 @@ pub async fn get_call(
     Path(call_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     parse_uid(&auth)?;
-    let record = state.db.get_call_record(&call_id).map_err(|e| http_err(&e))?;
+    let record = state
+        .db
+        .get_call_record(&call_id)
+        .map_err(|e| http_err(&e))?;
     let live_room = {
         let rooms = state.webrtc_rooms.lock().await;
-        rooms.get_room(&call_id).map(|r| serde_json::to_value(r).unwrap_or_default())
+        rooms
+            .get_room(&call_id)
+            .map(|r| serde_json::to_value(r).unwrap_or_default())
     };
-    let quality = state.db.aggregate_quality(&call_id).map_err(|e| http_err(&e))?;
-    let recordings = state.db.list_call_recordings(&call_id).map_err(|e| http_err(&e))?;
+    let quality = state
+        .db
+        .aggregate_quality(&call_id)
+        .map_err(|e| http_err(&e))?;
+    let recordings = state
+        .db
+        .list_call_recordings(&call_id)
+        .map_err(|e| http_err(&e))?;
 
     Ok(Json(serde_json::json!({
         "call_id": call_id,
@@ -288,9 +357,17 @@ pub async fn call_quality(
     State(state): State<AppState>,
     Path(call_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let metrics = state.db.aggregate_quality(&call_id).map_err(|e| http_err(&e))?;
-    let samples = state.db.get_quality_metrics(&call_id).map_err(|e| http_err(&e))?;
-    Ok(Json(serde_json::json!({ "aggregate": metrics, "last_n": samples.len().min(20) })))
+    let metrics = state
+        .db
+        .aggregate_quality(&call_id)
+        .map_err(|e| http_err(&e))?;
+    let samples = state
+        .db
+        .get_quality_metrics(&call_id)
+        .map_err(|e| http_err(&e))?;
+    Ok(Json(
+        serde_json::json!({ "aggregate": metrics, "last_n": samples.len().min(20) }),
+    ))
 }
 
 pub async fn call_history(
@@ -298,7 +375,10 @@ pub async fn call_history(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let user_id = parse_uid(&auth)?;
-    let history = state.db.get_call_history(user_id, 100).map_err(|e| http_err(&e))?;
+    let history = state
+        .db
+        .get_call_history(user_id, 100)
+        .map_err(|e| http_err(&e))?;
     Ok(Json(serde_json::json!({ "calls": history })))
 }
 
@@ -331,7 +411,9 @@ pub async fn webrtc_stats(
         .webrtc_actor
         .cast(WebRTCActorMsg::GetStats { reply_to: tx })
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:#}", e)))?;
-    let stats = rx.await.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Actor stopped".into()))?;
+    let stats = rx
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Actor stopped".into()))?;
     Ok(Json(stats))
 }
 
@@ -340,7 +422,9 @@ pub async fn room_peers(
     Path(call_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let rooms = state.webrtc_rooms.lock().await;
-    let room = rooms.get_room(&call_id).ok_or((StatusCode::NOT_FOUND, "Room not found".into()))?;
+    let room = rooms
+        .get_room(&call_id)
+        .ok_or((StatusCode::NOT_FOUND, "Room not found".into()))?;
     Ok(Json(serde_json::json!({
         "participants": room.participants,
         "viewers": room.viewers,
@@ -356,13 +440,24 @@ pub async fn update_live_title(
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let host_id = parse_uid(&auth)?;
-    let title = req["title"].as_str().ok_or((StatusCode::BAD_REQUEST, "title required".into()))?.to_string();
+    let title = req["title"]
+        .as_str()
+        .ok_or((StatusCode::BAD_REQUEST, "title required".into()))?
+        .to_string();
 
     let mut rooms = state.webrtc_rooms.lock().await;
-    let room = rooms.get_room(&call_id).cloned().ok_or((StatusCode::NOT_FOUND, "Room not found".into()))?;
+    let room = rooms
+        .get_room(&call_id)
+        .cloned()
+        .ok_or((StatusCode::NOT_FOUND, "Room not found".into()))?;
     if room.host_id != host_id {
-        return Err((StatusCode::FORBIDDEN, "Only the host can set the title".into()));
+        return Err((
+            StatusCode::FORBIDDEN,
+            "Only the host can set the title".into(),
+        ));
     }
-    rooms.set_title(&call_id, title.clone()).map_err(|e| (StatusCode::CONFLICT, e))?;
+    rooms
+        .set_title(&call_id, title.clone())
+        .map_err(|e| (StatusCode::CONFLICT, e))?;
     Ok(Json(serde_json::json!({ "title": title })))
 }

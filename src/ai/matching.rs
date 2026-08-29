@@ -13,8 +13,18 @@ pub struct MatchFeatures {
 /// bag-of-words vector. Deterministic per feature set.
 pub fn vectorize(features: &MatchFeatures) -> Vec<f64> {
     let keywords: Vec<&str> = vec![
-        "music", "games", "sports", "travel", "tech", "food", "art",
-        "movies", "fitness", "fashion", "business", "education",
+        "music",
+        "games",
+        "sports",
+        "travel",
+        "tech",
+        "food",
+        "art",
+        "movies",
+        "fitness",
+        "fashion",
+        "business",
+        "education",
     ];
     let mut vec = vec![0.0; keywords.len() + 4];
     for interest in &features.interests {
@@ -25,8 +35,17 @@ pub fn vectorize(features: &MatchFeatures) -> Vec<f64> {
         }
     }
     let base = keywords.len();
-    vec[base] = features.region.bytes().map(|b| b as f64).sum::<f64>().rem_euclid(2.0);
-    vec[base + 1] = if features.gender.to_lowercase() == "f" { 1.0 } else { 0.0 };
+    vec[base] = features
+        .region
+        .bytes()
+        .map(|b| b as f64)
+        .sum::<f64>()
+        .rem_euclid(2.0);
+    vec[base + 1] = if features.gender.to_lowercase() == "f" {
+        1.0
+    } else {
+        0.0
+    };
     vec[base + 2] = (features.age / 100.0).clamp(0.0, 1.0);
     vec[base + 3] = (features.rating / 5.0).clamp(0.0, 1.0);
     vec
@@ -46,11 +65,7 @@ pub fn cosine_similarity(a: &[f64], b: &[f64]) -> f64 {
         nb += y * y;
     }
     let denom = na.sqrt() * nb.sqrt();
-    if denom == 0.0 {
-        0.0
-    } else {
-        dot / denom
-    }
+    if denom == 0.0 { 0.0 } else { dot / denom }
 }
 
 /// Combines raw similarity with fuzzy classification to produce a final

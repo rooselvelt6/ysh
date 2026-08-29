@@ -5,14 +5,14 @@ mod auth;
 mod cache;
 mod config;
 mod db;
-mod i18n;
-mod webrtc;
 mod encryption;
+mod i18n;
 mod middleware;
 mod notification;
 mod observability;
 mod security;
 mod server;
+mod webrtc;
 mod ws;
 
 use anyhow::Result;
@@ -42,12 +42,23 @@ async fn main() -> Result<()> {
     let ysh_config = config::load_config(&config_path)?;
     tracing::info!("Config loaded successfully");
 
+    if ysh_config.observability.metrics_enabled {
+        if crate::observability::metrics::init() {
+            tracing::info!("Prometheus metrics exporter initialized (/metrics)");
+        } else {
+            tracing::warn!("Prometheus metrics exporter could not be initialized");
+        }
+    }
+
     let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
     let config_ref = std::sync::Arc::new(ysh_config.clone());
 
     tracing::info!("Generating cryptographic key pairs...");
     let x25519_keys = X25519KeyPair::generate();
-    tracing::info!("X25519 ECDH key pair generated (pub: {} bytes)", x25519_keys.public.as_bytes().len());
+    tracing::info!(
+        "X25519 ECDH key pair generated (pub: {} bytes)",
+        x25519_keys.public.as_bytes().len()
+    );
 
     let ed25519_keys = Ed25519KeyPair::generate();
     let signature = ed25519_keys.sign(b"ysh startup");
@@ -57,8 +68,7 @@ async fn main() -> Result<()> {
     tracing::info!("Ed25519 signing key pair generated and verified");
 
     tracing::info!("Creating secure secrets...");
-    let secure_jwt_secret =
-        SecureString::new(ysh_config.secrets.jwt_secret.clone());
+    let secure_jwt_secret = SecureString::new(ysh_config.secrets.jwt_secret.clone());
     let secure_encryption_key =
         SecureBuffer::new(ysh_config.secrets.encryption_key.as_bytes().to_vec());
     let encrypted_key = EncryptedKey::new(
@@ -95,17 +105,16 @@ async fn main() -> Result<()> {
         ddos_cfg.ip_block.auto_block_duration_secs,
         ddos_cfg.ip_block.max_blocklist_size,
     );
-    let per_ip_limiter = PerIpRateLimiter::new(
-        ddos_cfg.rate_limit.clone(),
-        ip_blocklist.clone(),
-    );
+    let per_ip_limiter = PerIpRateLimiter::new(ddos_cfg.rate_limit.clone(), ip_blocklist.clone());
     let ws_guard = WsGuard::new(ddos_cfg.ws.clone(), ip_blocklist.clone());
     let ddos_protection = DdosProtection::new(Arc::new(ddos_cfg.clone()), ip_blocklist.clone());
-    tracing::info!("DDoS protection enabled (body limit: {} bytes, timeout: {}s)", ddos_cfg.max_body_bytes, ddos_cfg.request_timeout_secs);
+    tracing::info!(
+        "DDoS protection enabled (body limit: {} bytes, timeout: {}s)",
+        ddos_cfg.max_body_bytes,
+        ddos_cfg.request_timeout_secs
+    );
 
-    let ai_engine = std::sync::Arc::new(crate::ai::AIEngine::new(
-        ysh_config.ai.clone(),
-    ));
+    let ai_engine = std::sync::Arc::new(crate::ai::AIEngine::new(ysh_config.ai.clone()));
 
     tracing::info!("Starting actors...");
     let (supervisor, _supervisor_handle) = ractor::Actor::spawn(
@@ -222,7 +231,8 @@ async fn main() -> Result<()> {
         user_id: "system".to_string(),
     });
     let (stats_tx, _stats_rx) = tokio::sync::oneshot::channel();
-    let _ = webrtc_actor.send_message(actors::webrtc_actor::WebRTCActorMsg::GetStats { reply_to: stats_tx });
+    let _ = webrtc_actor
+        .send_message(actors::webrtc_actor::WebRTCActorMsg::GetStats { reply_to: stats_tx });
     let _ = webrtc_actor.send_message(actors::webrtc_actor::WebRTCActorMsg::CallStart {
         call_id: "startup-probe".to_string(),
         caller_id: 0,
@@ -234,7 +244,8 @@ async fn main() -> Result<()> {
         caller_id: 0,
     });
     let (stats_tx, _stats_rx) = tokio::sync::oneshot::channel();
-    let _ = webrtc_actor.send_message(actors::webrtc_actor::WebRTCActorMsg::GetStats { reply_to: stats_tx });
+    let _ = webrtc_actor
+        .send_message(actors::webrtc_actor::WebRTCActorMsg::GetStats { reply_to: stats_tx });
     let _ = ai_actor.send_message(actors::ai_actor::AIActorMsg::LoadModel);
     let _ = ai_actor.send_message(actors::ai_actor::AIActorMsg::Moderate {
         content_id: "startup-check".to_string(),
@@ -260,20 +271,32 @@ async fn main() -> Result<()> {
 
     let nonce_gen = security::nonce::NonceGenerator::new();
     let nonce = nonce_gen.next();
-    tracing::info!("Nonce generated (counter: {}, nonce: {:02x?})", nonce_gen.current_counter(), &nonce[..4]);
+    tracing::info!(
+        "Nonce generated (counter: {}, nonce: {:02x?})",
+        nonce_gen.current_counter(),
+        &nonce[..4]
+    );
 
     let peer_public = x25519_keys.public;
     let _shared = x25519_keys.agree(&peer_public);
     tracing::info!("X25519 key agreement completed");
 
     let secure_buf = security::zeroize::SecureBuffer::from(b"test data".as_slice());
-    tracing::info!("SecureBuffer created (len: {}, empty: {})", secure_buf.len(), secure_buf.is_empty());
+    tracing::info!(
+        "SecureBuffer created (len: {}, empty: {})",
+        secure_buf.len(),
+        secure_buf.is_empty()
+    );
 
     let enc_key = security::zeroize::EncryptedKey::new(
         b"test key material".to_vec(),
         "aes-256-gcm".to_string(),
     );
-    tracing::info!("EncryptedKey created (algo: {}, bytes: {})", enc_key.algorithm(), enc_key.as_bytes().len());
+    tracing::info!(
+        "EncryptedKey created (algo: {}, bytes: {})",
+        enc_key.algorithm(),
+        enc_key.as_bytes().len()
+    );
 
     let cert_path = std::env::var("YSH_TLS_CERT").unwrap_or_default();
     let key_path = std::env::var("YSH_TLS_KEY").unwrap_or_default();
@@ -284,27 +307,28 @@ async fn main() -> Result<()> {
         }
     }
 
-    let cb = middleware::circuit_breaker::CircuitBreaker::new(3, std::time::Duration::from_secs(10));
+    let cb =
+        middleware::circuit_breaker::CircuitBreaker::new(3, std::time::Duration::from_secs(10));
     cb.record_failure();
     cb.record_failure();
     tracing::info!("Circuit breaker state: available={}", cb.is_available());
 
     let circuit_breaker = CircuitBreaker::new(5, std::time::Duration::from_secs(30));
 
-    let ws_connections = std::sync::Arc::new(tokio::sync::Mutex::new(
-        crate::ws::ConnectionManager::new(),
-    ));
-    let read_receipts = std::sync::Arc::new(tokio::sync::Mutex::new(
-        std::collections::HashMap::<(i64, i64), i64>::new(),
-    ));
+    let ws_connections =
+        std::sync::Arc::new(tokio::sync::Mutex::new(crate::ws::ConnectionManager::new()));
+    let read_receipts = std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::<
+        (i64, i64),
+        i64,
+    >::new()));
     let (match_tx, _match_rx) = tokio::sync::mpsc::unbounded_channel::<crate::ws::MatchEvent>();
 
     let i18n_engine = std::sync::Arc::new(crate::i18n::I18nEngine::new());
-    if let Ok(overrides) = db.list_i18n_overrides() {
-        if let Ok(mut guard) = i18n_engine.overrides.lock() {
-            for (k, v) in overrides {
-                guard.insert(k, v);
-            }
+    if let Ok(overrides) = db.list_i18n_overrides()
+        && let Ok(mut guard) = i18n_engine.overrides.lock()
+    {
+        for (k, v) in overrides {
+            guard.insert(k, v);
         }
     }
     tracing::info!(
@@ -358,12 +382,13 @@ async fn main() -> Result<()> {
         ddos_protection,
     };
 
-    let app = server::build_router(state);
+    let app = server::build_router(state.clone());
 
     let addr = format!("{}:{}", ysh_config.server.host, ysh_config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!("Server listening on {}", addr);
 
+    let mut metrics_shutdown_rx = shutdown_rx.clone();
     let server_handle = tokio::spawn(async move {
         axum::serve(listener, app)
             .with_graceful_shutdown(async move {
@@ -374,10 +399,32 @@ async fn main() -> Result<()> {
             .expect("Server failed");
     });
 
+    if ysh_config.observability.metrics_enabled {
+        let metrics_addr = format!(
+            "{}:{}",
+            ysh_config.observability.metrics_host, ysh_config.observability.metrics_port
+        );
+        match tokio::net::TcpListener::bind(&metrics_addr).await {
+            Ok(metrics_listener) => {
+                let metrics_app = server::build_metrics_router(state);
+                let _metrics_handle = tokio::spawn(async move {
+                    axum::serve(metrics_listener, metrics_app)
+                        .with_graceful_shutdown(async move {
+                            let _ = metrics_shutdown_rx.changed().await;
+                        })
+                        .await
+                        .expect("Metrics server failed");
+                });
+                tracing::info!("Metrics server listening on {}", metrics_addr);
+            }
+            Err(e) => {
+                tracing::warn!("Metrics server could not bind {}: {}", metrics_addr, e);
+            }
+        }
+    }
+
     tokio::spawn(async move {
-        signal::ctrl_c()
-            .await
-            .expect("Failed to listen for Ctrl+C");
+        signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
         tracing::info!("Shutdown signal received");
         let _ = shutdown_tx.send(true);
     });

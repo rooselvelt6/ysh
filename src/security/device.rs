@@ -1,4 +1,8 @@
-pub fn compute_fingerprint(user_agent: &str, accept_language: &str, accept_encoding: &str) -> String {
+pub fn compute_fingerprint(
+    user_agent: &str,
+    accept_language: &str,
+    accept_encoding: &str,
+) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(user_agent.as_bytes());
     hasher.update(b"|");

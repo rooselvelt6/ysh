@@ -63,7 +63,11 @@ fn concurrent_transfers_conserve_wallet_total() {
         .map(|i| {
             let db = db.clone();
             thread::spawn(move || {
-                let (from, to) = if i % 2 == 0 { (alice, bob) } else { (bob, alice) };
+                let (from, to) = if i % 2 == 0 {
+                    (alice, bob)
+                } else {
+                    (bob, alice)
+                };
                 for _ in 0..40 {
                     let _ = db.transfer(from, to, 100, "concurrent transfer");
                 }
@@ -134,14 +138,19 @@ fn concurrent_moment_likes_do_not_corrupt() {
     }
 
     let feed = db.get_moment_feed(author, 0, 10).unwrap();
-    let mine = feed.iter().find(|m| m["id"].as_i64() == Some(moment_id)).unwrap();
+    let mine = feed
+        .iter()
+        .find(|m| m["id"].as_i64() == Some(moment_id))
+        .unwrap();
     assert!(mine["likes"].as_i64().unwrap() >= 1);
 }
 
 #[test]
 fn concurrent_activity_logging_survives_pressure() {
     let db = setup_db();
-    let users: Vec<i64> = (0..6).map(|i| create_user(&db, &format!("act{}", i))).collect();
+    let users: Vec<i64> = (0..6)
+        .map(|i| create_user(&db, &format!("act{}", i)))
+        .collect();
 
     let db = db.clone();
     let handles: Vec<_> = users
@@ -167,7 +176,9 @@ fn concurrent_activity_logging_survives_pressure() {
 #[test]
 fn mixed_workload_finishes_cleanly() {
     let db = setup_db();
-    let users: Vec<i64> = (0..4).map(|i| create_user(&db, &format!("mw{}", i))).collect();
+    let users: Vec<i64> = (0..4)
+        .map(|i| create_user(&db, &format!("mw{}", i)))
+        .collect();
     db.deposit(users[0], 1_000_000, "seed").unwrap();
 
     let db = db.clone();

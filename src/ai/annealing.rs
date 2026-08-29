@@ -3,13 +3,7 @@ use crate::config::settings::AiConfig;
 /// Simulated annealing minimization over a bounded scalar domain.
 /// Used for resource/parameter optimization (e.g. pricing, QoS).
 #[allow(dead_code)]
-pub fn minimize(
-    cfg: &AiConfig,
-    cost: impl Fn(f64) -> f64,
-    start: f64,
-    min: f64,
-    max: f64,
-) -> f64 {
+pub fn minimize(cfg: &AiConfig, cost: impl Fn(f64) -> f64, start: f64, min: f64, max: f64) -> f64 {
     let mut rng_seed = 0x2545F4914F6CDD1Du64;
     let mut next_rand = move || {
         rng_seed ^= rng_seed << 13;

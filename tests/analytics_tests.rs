@@ -45,7 +45,12 @@ fn user_analytics_counts_new_signups() {
     let b = create_user(&db, "n2");
     let _ = (a, b);
     let data = db.get_user_analytics(3).unwrap();
-    assert_eq!(data["days"].as_array().unwrap().last().unwrap()["new_users"].as_i64().unwrap(), 2);
+    assert_eq!(
+        data["days"].as_array().unwrap().last().unwrap()["new_users"]
+            .as_i64()
+            .unwrap(),
+        2
+    );
 }
 
 #[test]
@@ -99,8 +104,11 @@ fn agency_performance_attributes_revenue() {
     let db = setup_db();
     let owner = create_user(&db, "owner");
     let member = create_user(&db, "member");
-    let agency_id = db.create_agency(owner, "Talent House", "Top agency").unwrap();
-    db.add_agency_member(agency_id, member, "performer").unwrap();
+    let agency_id = db
+        .create_agency(owner, "Talent House", "Top agency")
+        .unwrap();
+    db.add_agency_member(agency_id, member, "performer")
+        .unwrap();
     db.deposit(member, 30_000, "tx").unwrap();
 
     let perf = db.get_agency_performance().unwrap();
@@ -123,7 +131,10 @@ fn host_leaderboard_ranks_by_earnings() {
         db.finalize_call_payment(billing_id).unwrap();
     }
     let board = db.get_host_leaderboard(5).unwrap();
-    let mine = board.iter().find(|r| r["host_id"].as_i64() == Some(host)).unwrap();
+    let mine = board
+        .iter()
+        .find(|r| r["host_id"].as_i64() == Some(host))
+        .unwrap();
     assert_eq!(mine["calls"].as_i64().unwrap(), 2);
     assert!(mine["earnings"].as_i64().unwrap() > 0);
 }
@@ -143,7 +154,10 @@ fn geodistribution_includes_region_pct() {
     assert_eq!(geo["total_users"].as_i64().unwrap(), 2);
     let dist = geo["distribution"].as_array().unwrap();
     assert_eq!(dist.len(), 2);
-    assert_eq!(dist.iter().map(|d| d["pct"].as_i64().unwrap()).sum::<i64>(), 100);
+    assert_eq!(
+        dist.iter().map(|d| d["pct"].as_i64().unwrap()).sum::<i64>(),
+        100
+    );
 }
 
 #[test]
@@ -205,7 +219,12 @@ fn call_fees_only_count_completed() {
     let caller = create_user(&db, "c");
     db.deposit(caller, 50_000, "t").unwrap();
     db.start_call_billing(caller, host, "video", 5).unwrap();
-    let fees = db.sum_call_fees_range("0000-01-01", &chrono::Utc::now().format("%Y-%m-%d").to_string()).unwrap();
+    let fees = db
+        .sum_call_fees_range(
+            "0000-01-01",
+            &chrono::Utc::now().format("%Y-%m-%d").to_string(),
+        )
+        .unwrap();
     assert_eq!(fees, 0); // none completed yet
 }
 

@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 
 use crate::auth::jwt::AuthUser;
@@ -30,7 +30,10 @@ pub async fn run_job(
         "analytics" => crate::actors::jobs_actor::JobsActorMsg::RunAnalyticsSnapshot,
         _ => return Err((StatusCode::BAD_REQUEST, "Unknown job".into())),
     };
-    state.jobs_actor.cast(msg).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:#}", e)))?;
+    state
+        .jobs_actor
+        .cast(msg)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:#}", e)))?;
     Ok(Json(serde_json::json!({ "job": name, "triggered": true })))
 }
 
@@ -45,6 +48,8 @@ pub async fn jobs_stats(
         .jobs_actor
         .cast(crate::actors::jobs_actor::JobsActorMsg::GetStats { reply_to: tx })
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:#}", e)))?;
-    let stats = rx.await.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Actor stopped".into()))?;
+    let stats = rx
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Actor stopped".into()))?;
     Ok(Json(stats))
 }

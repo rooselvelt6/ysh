@@ -53,7 +53,10 @@ pub struct Room {
 
 pub fn now_secs() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
 }
 
 #[derive(Debug, Clone)]
@@ -80,7 +83,12 @@ pub struct RoomManager {
 }
 
 impl RoomManager {
-    pub fn new(p2p_capacity: u32, duo_capacity: u32, group_capacity: u32, max_live_viewers: u32) -> Self {
+    pub fn new(
+        p2p_capacity: u32,
+        duo_capacity: u32,
+        group_capacity: u32,
+        max_live_viewers: u32,
+    ) -> Self {
         Self {
             rooms: HashMap::new(),
             p2p_capacity: p2p_capacity as usize,
@@ -99,7 +107,13 @@ impl RoomManager {
         }
     }
 
-    pub fn create_room(&mut self, id: &str, call_type: CallType, host_id: i64, title: Option<String>) {
+    pub fn create_room(
+        &mut self,
+        id: &str,
+        call_type: CallType,
+        host_id: i64,
+        title: Option<String>,
+    ) {
         self.rooms.insert(
             id.to_string(),
             Room {
@@ -127,7 +141,12 @@ impl RoomManager {
 
     pub fn join(&mut self, room_id: &str, user_id: i64) -> JoinOutcome {
         let Some(room) = self.rooms.get(room_id) else {
-            return JoinOutcome { accepted: false, reason: Some("Room not found".into()), participants: vec![], viewer_count: 0 };
+            return JoinOutcome {
+                accepted: false,
+                reason: Some("Room not found".into()),
+                participants: vec![],
+                viewer_count: 0,
+            };
         };
         let call_type = room.call_type;
         let cap = self.capacity(call_type);
@@ -135,22 +154,52 @@ impl RoomManager {
 
         if call_type != CallType::Live {
             if room.participants.contains(&user_id) {
-                return JoinOutcome { accepted: false, reason: Some("Already in this room".into()), participants: room.participants.clone(), viewer_count: room.viewers.len() };
+                return JoinOutcome {
+                    accepted: false,
+                    reason: Some("Already in this room".into()),
+                    participants: room.participants.clone(),
+                    viewer_count: room.viewers.len(),
+                };
             }
             if room.participants.len() >= cap {
-                return JoinOutcome { accepted: false, reason: Some("Room capacity reached".into()), participants: room.participants.clone(), viewer_count: room.viewers.len() };
+                return JoinOutcome {
+                    accepted: false,
+                    reason: Some("Room capacity reached".into()),
+                    participants: room.participants.clone(),
+                    viewer_count: room.viewers.len(),
+                };
             }
             room.participants.push(user_id);
-            JoinOutcome { accepted: true, reason: None, participants: room.participants.clone(), viewer_count: room.viewers.len() }
+            JoinOutcome {
+                accepted: true,
+                reason: None,
+                participants: room.participants.clone(),
+                viewer_count: room.viewers.len(),
+            }
         } else {
             if room.participants.contains(&user_id) || room.viewers.contains(&user_id) {
-                return JoinOutcome { accepted: false, reason: Some("Already joined".into()), participants: room.participants.clone(), viewer_count: room.viewers.len() };
+                return JoinOutcome {
+                    accepted: false,
+                    reason: Some("Already joined".into()),
+                    participants: room.participants.clone(),
+                    viewer_count: room.viewers.len(),
+                };
             }
             if room.viewers.len() >= self.max_live_viewers {
-                return JoinOutcome { accepted: false, reason: Some("Max live viewers reached".into()), participants: room.participants.clone(), viewer_count: room.viewers.len() };
+                return JoinOutcome {
+                    accepted: false,
+                    reason: Some("Max live viewers reached".into()),
+                    participants: room.participants.clone(),
+                    viewer_count: room.viewers.len(),
+                };
             }
             room.viewers.push(user_id);
-            JoinOutcome { accepted: true, reason: None, participants: room.participants.clone(), viewer_count: room.viewers.len() }
+            JoinOutcome {
+                accepted: true,
+                reason: None,
+                participants: room.participants.clone(),
+                viewer_count: room.viewers.len(),
+            }
         }
     }
 
@@ -172,7 +221,12 @@ impl RoomManager {
         self.rooms.remove(room_id)
     }
 
-    pub fn set_screen_share(&mut self, room_id: &str, user_id: i64, active: bool) -> Result<bool, String> {
+    pub fn set_screen_share(
+        &mut self,
+        room_id: &str,
+        user_id: i64,
+        active: bool,
+    ) -> Result<bool, String> {
         let Some(room) = self.rooms.get_mut(room_id) else {
             return Err("Room not found".into());
         };
@@ -183,7 +237,12 @@ impl RoomManager {
         Ok(active)
     }
 
-    pub fn set_recording(&mut self, room_id: &str, active: bool, encrypted: bool) -> Result<bool, String> {
+    pub fn set_recording(
+        &mut self,
+        room_id: &str,
+        active: bool,
+        encrypted: bool,
+    ) -> Result<bool, String> {
         let Some(room) = self.rooms.get_mut(room_id) else {
             return Err("Room not found".into());
         };
@@ -204,31 +263,39 @@ impl RoomManager {
     }
 
     pub fn list_live(&self) -> Vec<serde_json::Value> {
-        self.rooms.values()
+        self.rooms
+            .values()
             .filter(|r| r.call_type == CallType::Live)
-            .map(|r| serde_json::json!({
-                "room_id": r.id,
-                "host_id": r.host_id,
-                "title": r.title,
-                "viewers": r.viewers.len(),
-                "screen_share": r.screen_share.is_some(),
-                "recording": r.recording,
-                "started_at": r.started_at,
-            }))
+            .map(|r| {
+                serde_json::json!({
+                    "room_id": r.id,
+                    "host_id": r.host_id,
+                    "title": r.title,
+                    "viewers": r.viewers.len(),
+                    "screen_share": r.screen_share.is_some(),
+                    "recording": r.recording,
+                    "started_at": r.started_at,
+                })
+            })
             .collect()
     }
 
     pub fn active_rooms(&self) -> Vec<serde_json::Value> {
-        self.rooms.values().map(|r| serde_json::json!({
-            "room_id": r.id,
-            "call_type": r.call_type.as_str(),
-            "host_id": r.host_id,
-            "participants": r.participants,
-            "viewers": r.viewers.len(),
-            "screen_share": r.screen_share,
-            "recording": r.recording,
-            "title": r.title,
-        })).collect()
+        self.rooms
+            .values()
+            .map(|r| {
+                serde_json::json!({
+                    "room_id": r.id,
+                    "call_type": r.call_type.as_str(),
+                    "host_id": r.host_id,
+                    "participants": r.participants,
+                    "viewers": r.viewers.len(),
+                    "screen_share": r.screen_share,
+                    "recording": r.recording,
+                    "title": r.title,
+                })
+            })
+            .collect()
     }
 
     #[allow(dead_code)]
@@ -255,7 +322,10 @@ mod tests {
         m.create_room("c1", CallType::P2P, 1, None);
         assert!(m.join("c1", 2).accepted);
         assert!(!m.join("c1", 3).accepted);
-        assert_eq!(m.join("c1", 3).reason.as_deref(), Some("Room capacity reached"));
+        assert_eq!(
+            m.join("c1", 3).reason.as_deref(),
+            Some("Room capacity reached")
+        );
     }
 
     #[test]
@@ -312,7 +382,10 @@ mod tests {
         assert!(out.room_empty);
 
         m.end_room("c1");
-        assert!(m.leave("c1", 3).is_none(), "leaving an ended room is a no-op");
+        assert!(
+            m.leave("c1", 3).is_none(),
+            "leaving an ended room is a no-op"
+        );
     }
 
     #[test]

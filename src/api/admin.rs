@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 
 use crate::auth::jwt::AuthUser;
@@ -21,8 +21,14 @@ pub async fn list_users(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     require_admin(&auth)?;
 
-    let offset: i64 = params.get("offset").and_then(|s| s.parse().ok()).unwrap_or(0);
-    let limit: i64 = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(50);
+    let offset: i64 = params
+        .get("offset")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let limit: i64 = params
+        .get("limit")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(50);
 
     let users = state
         .db

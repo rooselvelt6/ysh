@@ -29,7 +29,8 @@ fn call_record_roundtrip() {
     let alice = create_user(&db, "alice");
     let bob = create_user(&db, "bob");
 
-    db.create_call_record("c1", "c1", alice, "p2p", &[alice, bob]).unwrap();
+    db.create_call_record("c1", "c1", alice, "p2p", &[alice, bob])
+        .unwrap();
     let rec = db.get_call_record("c1").unwrap().unwrap();
     assert_eq!(rec.call_type, "p2p");
     assert_eq!(rec.participants, vec![alice, bob]);
@@ -42,7 +43,8 @@ fn join_flips_ringing_to_active() {
     let db = setup_db();
     let alice = create_user(&db, "alice");
     let bob = create_user(&db, "bob");
-    db.create_call_record("c1", "c1", alice, "duo", &[alice]).unwrap();
+    db.create_call_record("c1", "c1", alice, "duo", &[alice])
+        .unwrap();
 
     assert!(db.join_call("c1", bob).unwrap());
     let rec = db.get_call_record("c1").unwrap().unwrap();
@@ -59,7 +61,8 @@ fn leave_call_removes_participant() {
     let db = setup_db();
     let alice = create_user(&db, "alice");
     let bob = create_user(&db, "bob");
-    db.create_call_record("c1", "c1", alice, "p2p", &[alice, bob]).unwrap();
+    db.create_call_record("c1", "c1", alice, "p2p", &[alice, bob])
+        .unwrap();
 
     db.leave_call("c1", bob).unwrap();
     let rec = db.get_call_record("c1").unwrap().unwrap();
@@ -71,7 +74,8 @@ fn screen_share_toggle() {
     let db = setup_db();
     let alice = create_user(&db, "alice");
     let bob = create_user(&db, "bob");
-    db.create_call_record("c1", "c1", alice, "group", &[alice, bob]).unwrap();
+    db.create_call_record("c1", "c1", alice, "group", &[alice, bob])
+        .unwrap();
 
     assert!(db.set_call_screen_share("c1", bob, true).unwrap());
     let rec = db.get_call_record("c1").unwrap().unwrap();
@@ -87,7 +91,8 @@ fn screen_share_toggle() {
 fn end_call_record_computes_duration() {
     let db = setup_db();
     let alice = create_user(&db, "alice");
-    db.create_call_record("c1", "c1", alice, "p2p", &[alice]).unwrap();
+    db.create_call_record("c1", "c1", alice, "p2p", &[alice])
+        .unwrap();
     db.set_call_recording("c1", true, true).unwrap();
 
     let duration = db.end_call_record("c1").unwrap();
@@ -106,8 +111,10 @@ fn call_history_returns_joined_calls() {
     let db = setup_db();
     let alice = create_user(&db, "alice");
     let bob = create_user(&db, "bob");
-    db.create_call_record("c1", "c1", alice, "p2p", &[alice, bob]).unwrap();
-    db.create_call_record("c2", "c2", alice, "duo", &[alice, bob]).unwrap();
+    db.create_call_record("c1", "c1", alice, "p2p", &[alice, bob])
+        .unwrap();
+    db.create_call_record("c2", "c2", alice, "duo", &[alice, bob])
+        .unwrap();
 
     let history = db.get_call_history(alice, 100).unwrap();
     assert_eq!(history.len(), 2);
@@ -119,8 +126,10 @@ fn call_history_returns_joined_calls() {
 fn call_stats_counts_active_and_total() {
     let db = setup_db();
     let alice = create_user(&db, "alice");
-    db.create_call_record("c1", "c1", alice, "p2p", &[alice]).unwrap();
-    db.create_call_record("c2", "c2", alice, "live", &[alice]).unwrap();
+    db.create_call_record("c1", "c1", alice, "p2p", &[alice])
+        .unwrap();
+    db.create_call_record("c2", "c2", alice, "live", &[alice])
+        .unwrap();
     db.end_call_record("c1").unwrap();
 
     let stats = db.get_call_stats().unwrap();
@@ -136,8 +145,10 @@ fn call_stats_counts_active_and_total() {
 fn quality_samples_and_aggregation() {
     let db = setup_db();
     let alice = create_user(&db, "alice");
-    db.add_quality_sample("c1", alice, 1500.0, 0.5, 40.0, "1280x720", "h").unwrap();
-    db.add_quality_sample("c1", alice, 2500.0, 1.5, 60.0, "1280x720", "f").unwrap();
+    db.add_quality_sample("c1", alice, 1500.0, 0.5, 40.0, "1280x720", "h")
+        .unwrap();
+    db.add_quality_sample("c1", alice, 2500.0, 1.5, 60.0, "1280x720", "f")
+        .unwrap();
 
     let samples = db.get_quality_metrics("c1").unwrap();
     assert_eq!(samples.len(), 2);
@@ -157,9 +168,12 @@ fn quality_samples_and_aggregation() {
 fn recording_lifecycle() {
     let db = setup_db();
     let alice = create_user(&db, "alice");
-    db.create_call_record("c1", "c1", alice, "group", &[alice]).unwrap();
+    db.create_call_record("c1", "c1", alice, "group", &[alice])
+        .unwrap();
 
-    let seg = db.start_call_recording("c1", "enc://recordings/c1/1", true, 0).unwrap();
+    let seg = db
+        .start_call_recording("c1", "enc://recordings/c1/1", true, 0)
+        .unwrap();
     assert!(seg > 0);
 
     let rec = db.get_call_record("c1").unwrap().unwrap();
@@ -245,8 +259,13 @@ fn find_random_peer_excludes_self_and_busy_users() {
     assert_eq!(db.find_random_peer(alice).unwrap(), Some(bob));
     assert_eq!(db.find_random_peer(bob).unwrap(), Some(alice));
 
-    db.create_call_record("busy", "busy", bob, "p2p", &[bob]).unwrap();
-    assert_eq!(db.find_random_peer(alice).unwrap(), None, "bob is in a call");
+    db.create_call_record("busy", "busy", bob, "p2p", &[bob])
+        .unwrap();
+    assert_eq!(
+        db.find_random_peer(alice).unwrap(),
+        None,
+        "bob is in a call"
+    );
 }
 
 #[test]

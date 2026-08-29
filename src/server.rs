@@ -1,15 +1,16 @@
 use axum::{
+    Router,
     body::Body,
     extract::State,
     http::{Method, Request, StatusCode},
     middleware::{self, Next},
     response::Response,
     routing::{delete, get, post},
-    Router,
 };
 use std::sync::Arc;
 use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::timeout::TimeoutLayer;
 
 use crate::actors::ai_actor::AIActorMsg;
@@ -20,7 +21,7 @@ use crate::cache::{Cache, RateLimitCache, SessionCache};
 use crate::config::YshConfig;
 use crate::db::Database;
 use crate::middleware::circuit_breaker::CircuitBreaker;
-use crate::middleware::ddos_protection::{extract_client_ip, DdosProtection};
+use crate::middleware::ddos_protection::{DdosProtection, extract_client_ip};
 use crate::middleware::ip_blocklist::IpBlocklist;
 use crate::middleware::rate_limit::PerIpRateLimiter;
 use crate::middleware::ws_guard::WsGuard;
@@ -60,15 +61,13 @@ pub struct AppState {
 pub fn build_router(state: AppState) -> Router {
     let health_routes = Router::new()
         .route("/healthz", get(health_check))
-        .route("/readyz", get(readiness_check));
+        .route("/readyz", get(readiness_check))
+        .route("/metrics", get(metrics_handler));
 
     let auth_routes = Router::new()
         .route("/register", post(crate::auth::handlers::register))
         .route("/login", post(crate::auth::handlers::login))
-        .route(
-            "/login/2fa",
-            post(crate::auth::handlers::verify_2fa_login),
-        )
+        .route("/login/2fa", post(crate::auth::handlers::verify_2fa_login))
         .route("/me", get(crate::auth::handlers::me));
 
     let crypto_routes = Router::new()
@@ -77,14 +76,8 @@ pub fn build_router(state: AppState) -> Router {
 
     let two_factor_routes = Router::new()
         .route("/2fa/setup", post(crate::auth::two_factor::setup_2fa))
-        .route(
-            "/2fa/verify",
-            post(crate::auth::two_factor::verify_2fa),
-        )
-        .route(
-            "/2fa/disable",
-            post(crate::auth::two_factor::disable_2fa),
-        )
+        .route("/2fa/verify", post(crate::auth::two_factor::verify_2fa))
+        .route("/2fa/disable", post(crate::auth::two_factor::disable_2fa))
         .route(
             "/2fa/recovery-codes",
             get(crate::auth::two_factor::get_recovery_codes),
@@ -99,28 +92,16 @@ pub fn build_router(state: AppState) -> Router {
         );
 
     let gdpr_routes = Router::new()
-        .route(
-            "/gdpr/export",
-            get(crate::auth::gdpr::export_user_data),
-        )
-        .route(
-            "/gdpr/delete",
-            post(crate::auth::gdpr::delete_user_data),
-        )
-        .route(
-            "/gdpr/consent",
-            post(crate::auth::gdpr::record_consent),
-        )
+        .route("/gdpr/export", get(crate::auth::gdpr::export_user_data))
+        .route("/gdpr/delete", post(crate::auth::gdpr::delete_user_data))
+        .route("/gdpr/consent", post(crate::auth::gdpr::record_consent))
         .route(
             "/gdpr/consent/history",
             get(crate::auth::gdpr::get_consent_history),
         );
 
     let ccpa_routes = Router::new()
-        .route(
-            "/ccpa/do-not-sell",
-            get(crate::auth::ccpa::get_do_not_sell),
-        )
+        .route("/ccpa/do-not-sell", get(crate::auth::ccpa::get_do_not_sell))
         .route(
             "/ccpa/do-not-sell",
             post(crate::auth::ccpa::set_do_not_sell),
@@ -170,32 +151,20 @@ pub fn build_router(state: AppState) -> Router {
 
     let gift_routes = Router::new()
         .route("/gifts/catalog", get(crate::api::gift::get_catalog))
-        .route(
-            "/gifts/send/{user_id}",
-            post(crate::api::gift::send_gift),
-        )
-        .route(
-            "/gifts/received",
-            get(crate::api::gift::get_received_gifts),
-        )
-        .route(
-            "/gifts/sent",
-            get(crate::api::gift::get_sent_gifts),
-        )
-        .route(
-            "/gifts/stats",
-            get(crate::api::gift::get_gift_stats),
-        )
-        .route(
-            "/gifts/nft",
-            get(crate::api::gift::get_nft_gifts),
-        );
+        .route("/gifts/send/{user_id}", post(crate::api::gift::send_gift))
+        .route("/gifts/received", get(crate::api::gift::get_received_gifts))
+        .route("/gifts/sent", get(crate::api::gift::get_sent_gifts))
+        .route("/gifts/stats", get(crate::api::gift::get_gift_stats))
+        .route("/gifts/nft", get(crate::api::gift::get_nft_gifts));
 
     let staking_routes = Router::new()
         .route("/staking/stake", post(crate::api::staking::stake))
         .route("/staking/unstake", post(crate::api::staking::unstake))
         .route("/staking/claim", post(crate::api::staking::claim_rewards))
-        .route("/staking/positions", get(crate::api::staking::get_positions))
+        .route(
+            "/staking/positions",
+            get(crate::api::staking::get_positions),
+        )
         .route("/staking/stats", get(crate::api::staking::get_stats));
 
     let payout_routes = Router::new()
@@ -319,13 +288,19 @@ pub fn build_router(state: AppState) -> Router {
         .route("/report", post(crate::api::social::create_report))
         .route("/reports", get(crate::api::social::get_my_reports))
         .route("/badges", get(crate::api::social::get_my_badges))
-        .route("/badges/{user_id}", get(crate::api::social::get_user_badges))
+        .route(
+            "/badges/{user_id}",
+            get(crate::api::social::get_user_badges),
+        )
         .route("/rating/{user_id}", post(crate::api::social::rate_user))
         .route(
             "/rating/{user_id}",
             get(crate::api::social::get_user_reputation),
         )
-        .route("/reputation/{user_id}", get(crate::api::social::get_user_reputation))
+        .route(
+            "/reputation/{user_id}",
+            get(crate::api::social::get_user_reputation),
+        )
         .route("/trust", get(crate::api::social::get_my_trust))
         .route("/flag", post(crate::api::social::flag_content))
         .route("/appeal", post(crate::api::social::create_appeal))
@@ -372,16 +347,37 @@ pub fn build_router(state: AppState) -> Router {
     let webrtc_routes = Router::new()
         .route("/call/start", post(crate::api::webrtc::start_call))
         .route("/call/{call_id}/join", post(crate::api::webrtc::join_call))
-        .route("/call/{call_id}/leave", post(crate::api::webrtc::leave_call))
+        .route(
+            "/call/{call_id}/leave",
+            post(crate::api::webrtc::leave_call),
+        )
         .route("/call/{call_id}/end", post(crate::api::webrtc::end_call))
-        .route("/call/{call_id}/screen-share", post(crate::api::webrtc::toggle_screen_share))
-        .route("/call/{call_id}/recording/start", post(crate::api::webrtc::start_recording))
-        .route("/call/{call_id}/recording/stop", post(crate::api::webrtc::stop_recording))
-        .route("/call/{call_id}/quality", post(crate::api::webrtc::report_quality))
-        .route("/call/{call_id}/quality", get(crate::api::webrtc::call_quality))
+        .route(
+            "/call/{call_id}/screen-share",
+            post(crate::api::webrtc::toggle_screen_share),
+        )
+        .route(
+            "/call/{call_id}/recording/start",
+            post(crate::api::webrtc::start_recording),
+        )
+        .route(
+            "/call/{call_id}/recording/stop",
+            post(crate::api::webrtc::stop_recording),
+        )
+        .route(
+            "/call/{call_id}/quality",
+            post(crate::api::webrtc::report_quality),
+        )
+        .route(
+            "/call/{call_id}/quality",
+            get(crate::api::webrtc::call_quality),
+        )
         .route("/call/{call_id}", get(crate::api::webrtc::get_call))
         .route("/call/{call_id}/peers", get(crate::api::webrtc::room_peers))
-        .route("/call/{call_id}/title", post(crate::api::webrtc::update_live_title))
+        .route(
+            "/call/{call_id}/title",
+            post(crate::api::webrtc::update_live_title),
+        )
         .route("/calls/history", get(crate::api::webrtc::call_history))
         .route("/calls/live", get(crate::api::webrtc::live_streams))
         .route("/calls/rooms", get(crate::api::webrtc::active_rooms))
@@ -431,14 +427,8 @@ pub fn build_router(state: AppState) -> Router {
         );
 
     let chat_routes = Router::new()
-        .route(
-            "/chat/sessions",
-            get(crate::api::chat::list_sessions),
-        )
-        .route(
-            "/chat/session",
-            post(crate::api::chat::create_session),
-        )
+        .route("/chat/sessions", get(crate::api::chat::list_sessions))
+        .route("/chat/session", post(crate::api::chat::create_session))
         .route(
             "/chat/session/{session_id}/messages",
             get(crate::api::chat::get_messages),
@@ -447,26 +437,14 @@ pub fn build_router(state: AppState) -> Router {
             "/chat/session/{session_id}/read",
             post(crate::api::chat::mark_read),
         )
-        .route(
-            "/chat/unread",
-            get(crate::api::chat::unread_count),
-        )
-        .route(
-            "/chat/online",
-            get(crate::api::chat::online_users),
-        );
+        .route("/chat/unread", get(crate::api::chat::unread_count))
+        .route("/chat/online", get(crate::api::chat::online_users));
 
     let config_routes = Router::new().route("/config", get(get_config));
 
     let ai_routes = Router::new()
-        .route(
-            "/ai/moderation/text",
-            post(crate::api::ai::moderate_text),
-        )
-        .route(
-            "/ai/anomaly/score",
-            post(crate::api::ai::anomaly_score),
-        )
+        .route("/ai/moderation/text", post(crate::api::ai::moderate_text))
+        .route("/ai/anomaly/score", post(crate::api::ai::anomaly_score))
         .route(
             "/ai/anomaly/detector",
             post(crate::api::ai::anomaly_detector_demo),
@@ -476,14 +454,8 @@ pub fn build_router(state: AppState) -> Router {
             "/ai/matching/vectorize",
             post(crate::api::ai::match_vectorize),
         )
-        .route(
-            "/ai/neural/predict",
-            post(crate::api::ai::neural_predict),
-        )
-        .route(
-            "/ai/neural/train",
-            post(crate::api::ai::neural_train),
-        )
+        .route("/ai/neural/predict", post(crate::api::ai::neural_predict))
+        .route("/ai/neural/train", post(crate::api::ai::neural_train))
         .route(
             "/ai/optimize/genetic",
             post(crate::api::ai::optimize_genetic),
@@ -508,17 +480,50 @@ pub fn build_router(state: AppState) -> Router {
         .route("/admin/jobs/stats", get(crate::api::jobs::jobs_stats));
 
     let analytics_routes = Router::new()
-        .route("/admin/analytics/realtime", get(crate::api::analytics::realtime_analytics))
-        .route("/admin/analytics/users", get(crate::api::analytics::user_analytics))
-        .route("/admin/analytics/revenue", get(crate::api::analytics::revenue_analytics))
-        .route("/admin/analytics/agencies", get(crate::api::analytics::agency_analytics))
-        .route("/admin/analytics/hosts", get(crate::api::analytics::hosts_leaderboard))
-        .route("/admin/analytics/geo", get(crate::api::analytics::geo_analytics))
-        .route("/admin/analytics/moderation", get(crate::api::analytics::moderation_analytics))
-        .route("/admin/analytics/health", get(crate::api::analytics::system_health))
-        .route("/admin/analytics/snapshots", get(crate::api::analytics::analytics_snapshots))
-        .route("/admin/analytics/export", get(crate::api::analytics::export_analytics))
-        .route("/profile/region/{region}", post(crate::api::analytics::set_my_region));
+        .route(
+            "/admin/analytics/realtime",
+            get(crate::api::analytics::realtime_analytics),
+        )
+        .route(
+            "/admin/analytics/users",
+            get(crate::api::analytics::user_analytics),
+        )
+        .route(
+            "/admin/analytics/revenue",
+            get(crate::api::analytics::revenue_analytics),
+        )
+        .route(
+            "/admin/analytics/agencies",
+            get(crate::api::analytics::agency_analytics),
+        )
+        .route(
+            "/admin/analytics/hosts",
+            get(crate::api::analytics::hosts_leaderboard),
+        )
+        .route(
+            "/admin/analytics/geo",
+            get(crate::api::analytics::geo_analytics),
+        )
+        .route(
+            "/admin/analytics/moderation",
+            get(crate::api::analytics::moderation_analytics),
+        )
+        .route(
+            "/admin/analytics/health",
+            get(crate::api::analytics::system_health),
+        )
+        .route(
+            "/admin/analytics/snapshots",
+            get(crate::api::analytics::analytics_snapshots),
+        )
+        .route(
+            "/admin/analytics/export",
+            get(crate::api::analytics::export_analytics),
+        )
+        .route(
+            "/profile/region/{region}",
+            post(crate::api::analytics::set_my_region),
+        );
 
     let api_routes = Router::new()
         .merge(auth_routes)
@@ -562,12 +567,18 @@ pub fn build_router(state: AppState) -> Router {
             Method::OPTIONS,
         ])
         .allow_headers(AllowHeaders::any())
-        .max_age(std::time::Duration::from_secs(state.config.cors.max_age_secs));
+        .max_age(std::time::Duration::from_secs(
+            state.config.cors.max_age_secs,
+        ));
 
     if cors_has_wildcard {
         cors = cors.allow_origin(AllowOrigin::any());
     } else {
-        let origins: Vec<axum::http::HeaderValue> = state.config.cors.allowed_origins.iter()
+        let origins: Vec<axum::http::HeaderValue> = state
+            .config
+            .cors
+            .allowed_origins
+            .iter()
             .filter_map(|o| o.parse().ok())
             .collect();
         if !origins.is_empty() {
@@ -575,13 +586,12 @@ pub fn build_router(state: AppState) -> Router {
         }
     }
 
-    let ws_routes = Router::new()
-        .route("/ws", get(ws_upgrade_handler));
+    let ws_routes = Router::new().route("/ws", get(ws_upgrade_handler));
 
     let body_limit = state.config.ddos.max_body_bytes;
     let timeout_secs = state.config.ddos.request_timeout_secs;
 
-    Router::new()
+    let app = Router::new()
         .merge(health_routes)
         .merge(ws_routes)
         .nest("/api/v1", api_routes)
@@ -590,7 +600,10 @@ pub fn build_router(state: AppState) -> Router {
         ))
         .layer(cors)
         .layer(RequestBodyLimitLayer::new(body_limit))
-        .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, std::time::Duration::from_secs(timeout_secs)))
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            std::time::Duration::from_secs(timeout_secs),
+        ))
         .layer(middleware::from_fn_with_state(
             state.ddos_protection.clone(),
             crate::middleware::ddos_protection::ddos_middleware,
@@ -603,7 +616,93 @@ pub fn build_router(state: AppState) -> Router {
             state.clone(),
             circuit_breaker_middleware,
         ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            metrics_middleware,
+        ));
+
+    let static_dir = state.config.server.static_dir.clone();
+    let index_html = std::path::Path::new(&static_dir).join("index.html");
+    if std::path::Path::new(&static_dir).is_dir() && index_html.exists() {
+        tracing::info!("Serving frontend static files from {}", static_dir);
+        let serve = ServeDir::new(static_dir)
+            .append_index_html_on_directories(true)
+            .not_found_service(ServeFile::new(index_html));
+        app.fallback_service(serve).with_state(state)
+    } else {
+        tracing::warn!(
+            "Static dir {} not found — API only (frontend WASM no disponible en /)",
+            static_dir
+        );
+        app.fallback(static_not_found).with_state(state)
+    }
+}
+
+/// Router independiente para el endpoint `/metrics` en el puerto de
+/// observabilidad (`metrics_host:metrics_port`, default 0.0.0.0:9091).
+/// Se sirve aparte del API para que Prometheus pueda scrapear sin pasar
+/// por los middleware de rate-limit/anti-DDoS del servidor principal.
+pub fn build_metrics_router(state: AppState) -> Router {
+    Router::new()
+        .route("/metrics", get(metrics_handler))
         .with_state(state)
+}
+
+async fn static_not_found() -> (StatusCode, axum::Json<serde_json::Value>) {
+    (
+        StatusCode::NOT_FOUND,
+        axum::Json(serde_json::json!({ "error": "not_found" })),
+    )
+}
+
+async fn metrics_middleware(
+    State(state): State<AppState>,
+    request: Request<Body>,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let response = next.run(request).await;
+    if state.config.observability.metrics_enabled {
+        let code = match response.status().as_u16() {
+            100..=199 => "1xx",
+            200..=299 => "2xx",
+            300..=399 => "3xx",
+            400..=499 => "4xx",
+            _ => "5xx",
+        };
+        metrics::counter!("http_requests_total", "code" => code).increment(1);
+    }
+    Ok(response)
+}
+
+async fn metrics_handler(State(state): State<AppState>) -> (StatusCode, String) {
+    if !state.config.observability.metrics_enabled
+        || !crate::observability::metrics::is_initialized()
+    {
+        return (StatusCode::SERVICE_UNAVAILABLE, "metrics_disabled".into());
+    }
+
+    metrics::gauge!("ysh_uptime_seconds").set(crate::observability::metrics::uptime_secs() as f64);
+    if let Ok(meta) = std::fs::metadata("ysh.db") {
+        metrics::gauge!("ysh_db_size_bytes").set(meta.len() as f64);
+    }
+    let cache_stats = state.cache.stats();
+    metrics::gauge!("ysh_cache_entries").set(cache_stats.total_entries as f64);
+    metrics::gauge!("ysh_blocked_ips").set(state.ip_blocklist.blocked_count() as f64);
+    if let Ok(ws_guard) = state.ws_connections.try_lock() {
+        metrics::gauge!("ysh_ws_connections_active").set(ws_guard.online_count() as f64);
+    }
+    metrics::gauge!("ysh_users_total").set(state.db.user_count().unwrap_or(0) as f64);
+
+    match crate::observability::metrics::render() {
+        Some(body) => (
+            StatusCode::OK,
+            format!("{body}\n# ysh_version {}\n", env!("CARGO_PKG_VERSION")),
+        ),
+        None => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "metrics_unavailable".into(),
+        ),
+    }
 }
 
 async fn per_ip_rate_limit_middleware(
@@ -617,6 +716,7 @@ async fn per_ip_rate_limit_middleware(
     let result = state.per_ip_limiter.check(&ip, &path);
     if !result.allowed {
         tracing::warn!("Per-IP rate limit exceeded: {} on {}", ip, path);
+        metrics::counter!("http_rate_limited_total").increment(1);
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
     Ok(next.run(request).await)
@@ -629,10 +729,12 @@ async fn circuit_breaker_middleware(
 ) -> Result<Response, StatusCode> {
     if !state.circuit_breaker.is_available() {
         tracing::warn!("Circuit breaker open, rejecting request");
+        metrics::gauge!("circuit_breaker_open").set(1.0);
         return Err(StatusCode::SERVICE_UNAVAILABLE);
     }
     let response = next.run(request).await;
     state.circuit_breaker.record_success();
+    metrics::gauge!("circuit_breaker_open").set(0.0);
     Ok(response)
 }
 
@@ -698,5 +800,6 @@ async fn ws_upgrade_handler(
     axum::extract::Query(query): axum::extract::Query<WsAuthQuery>,
     State(state): State<AppState>,
 ) -> axum::response::Response {
+    metrics::counter!("ysh_ws_connections_total").increment(1);
     ws.on_upgrade(move |socket| crate::ws::handle_ws(socket, query, state))
 }

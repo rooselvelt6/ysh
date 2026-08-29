@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod token_tests {
     use ysh::security::token::{
-        create_refresh_token, create_token, create_token_with_kind, validate_token, Claims,
+        Claims, create_refresh_token, create_token, create_token_with_kind, validate_token,
     };
 
     const SECRET: &[u8] = b"test_secret_key_32_bytes_long!!!";
@@ -17,8 +17,7 @@ mod token_tests {
 
     #[test]
     fn token_with_custom_kind() {
-        let token =
-            create_token_with_kind("42", "admin", SECRET, "2fa_pending", 1).unwrap();
+        let token = create_token_with_kind("42", "admin", SECRET, "2fa_pending", 1).unwrap();
         let claims = validate_token(&token, SECRET).unwrap();
         assert_eq!(claims.sub, "42");
         assert_eq!(claims.kind, "2fa_pending");
@@ -75,7 +74,10 @@ mod token_tests {
         let claims = validate_token(&token, SECRET).unwrap();
         let now = chrono::Utc::now().timestamp() as usize;
         let days_30_secs = 30 * 24 * 3600;
-        assert!(claims.exp > now + days_30_secs - 10, "Refresh token should expire ~30 days out");
+        assert!(
+            claims.exp > now + days_30_secs - 10,
+            "Refresh token should expire ~30 days out"
+        );
     }
 
     #[test]
@@ -100,8 +102,7 @@ mod token_tests {
 
     #[test]
     fn custom_expiry_hours() {
-        let token =
-            create_token_with_kind("1", "user", SECRET, "access", 1).unwrap();
+        let token = create_token_with_kind("1", "user", SECRET, "access", 1).unwrap();
         let claims = validate_token(&token, SECRET).unwrap();
         let now = chrono::Utc::now().timestamp() as usize;
         let hour_secs = 3600;

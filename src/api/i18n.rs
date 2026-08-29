@@ -3,9 +3,9 @@
 use std::collections::HashMap;
 
 use axum::{
-    extract::{Path, Query, State},
-    http::{header, StatusCode},
     Json,
+    extract::{Path, Query, State},
+    http::{StatusCode, header},
 };
 
 use crate::auth::jwt::AuthUser;
@@ -170,7 +170,9 @@ pub async fn admin_upsert(
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "lock poisoned".into()))?
         .insert(format!("{locale}::{key}"), value.to_string());
 
-    Ok(Json(serde_json::json!({ "locale": locale, "key": key, "value": value })))
+    Ok(Json(
+        serde_json::json!({ "locale": locale, "key": key, "value": value }),
+    ))
 }
 
 /// Deletes a translation override (admin).

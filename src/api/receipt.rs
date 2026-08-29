@@ -1,4 +1,4 @@
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{Json, extract::State, http::StatusCode};
 
 use crate::auth::jwt::AuthUser;
 use crate::server::AppState;
@@ -8,11 +8,14 @@ pub async fn get_receipt(
     State(state): State<AppState>,
     axum::extract::Path(receipt_id): axum::extract::Path<i64>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let _user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let _user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
-    let receipt = state.db.get_receipt(receipt_id)
+    let receipt = state
+        .db
+        .get_receipt(receipt_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "Receipt not found".into()))?;
 
@@ -23,11 +26,14 @@ pub async fn get_my_receipts(
     auth: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
-    let receipts = state.db.get_user_receipts(user_id, 50)
+    let receipts = state
+        .db
+        .get_user_receipts(user_id, 50)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(serde_json::json!({
@@ -41,11 +47,14 @@ pub async fn verify_receipt(
     State(state): State<AppState>,
     axum::extract::Path(receipt_id): axum::extract::Path<i64>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let _user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let _user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
-    let valid = state.db.verify_receipt(receipt_id)
+    let valid = state
+        .db
+        .verify_receipt(receipt_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(serde_json::json!({

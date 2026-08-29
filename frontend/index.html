@@ -15,7 +15,7 @@
 </head>
 <body>
     <div id="app"></div>
-    <script>window.__YSH_API__ = 'http://localhost:3000';</script>
+    <script>window.__YSH_API__ = window.__YSH_API__ || '';</script>
     <script type="module">
         import init, { main } from './pkg/ysh_frontend.js';
         await init();

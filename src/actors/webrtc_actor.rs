@@ -1,4 +1,4 @@
-use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef};
+use ractor::{Actor, ActorProcessingErr, ActorRef, async_trait};
 use std::sync::Arc;
 
 use crate::config::settings::WebRtcConfig;
@@ -57,18 +57,39 @@ impl Actor for WebRTCActor {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match msg {
-            WebRTCActorMsg::CallStart { call_id, caller_id, callee_id, call_type } => {
+            WebRTCActorMsg::CallStart {
+                call_id,
+                caller_id,
+                callee_id,
+                call_type,
+            } => {
                 state.calls_started += 1;
-                state.db.create_call_record(&call_id, &call_id, caller_id, &call_type, &{
-                    if callee_id > 0 { vec![caller_id, callee_id] } else { vec![caller_id] }
-                })?;
+                state
+                    .db
+                    .create_call_record(&call_id, &call_id, caller_id, &call_type, &{
+                        if callee_id > 0 {
+                            vec![caller_id, callee_id]
+                        } else {
+                            vec![caller_id]
+                        }
+                    })?;
                 let host_id = if callee_id > 0 { callee_id } else { caller_id };
-                let _ = state.db.start_call_billing(caller_id, host_id, &call_type, state.config.cost_per_minute);
+                let _ = state.db.start_call_billing(
+                    caller_id,
+                    host_id,
+                    &call_type,
+                    state.config.cost_per_minute,
+                );
                 tracing::info!("WebRTC call started: {} ({})", call_id, call_type);
             }
             WebRTCActorMsg::CallEnd { call_id, caller_id } => {
                 let duration = state.db.end_call_record(&call_id).unwrap_or(0);
-                if let Some(cb_id) = state.db.find_active_call_billing(caller_id).ok().flatten().map(|cb| cb.id)
+                if let Some(cb_id) = state
+                    .db
+                    .find_active_call_billing(caller_id)
+                    .ok()
+                    .flatten()
+                    .map(|cb| cb.id)
                     && let Some(res) = state
                         .db
                         .end_call_billing(cb_id)
@@ -80,18 +101,40 @@ impl Actor for WebRTCActor {
                 state.calls_ended += 1;
                 tracing::info!("WebRTC call ended: {} ({}s)", call_id, duration);
             }
-            WebRTCActorMsg::QualityReport { call_id, user_id, bitrate_kbps, packet_loss_pct, rtt_ms, resolution, simulcast_tier } => {
-                state.db.add_quality_sample(&call_id, user_id, bitrate_kbps, packet_loss_pct, rtt_ms, &resolution, &simulcast_tier)?;
+            WebRTCActorMsg::QualityReport {
+                call_id,
+                user_id,
+                bitrate_kbps,
+                packet_loss_pct,
+                rtt_ms,
+                resolution,
+                simulcast_tier,
+            } => {
+                state.db.add_quality_sample(
+                    &call_id,
+                    user_id,
+                    bitrate_kbps,
+                    packet_loss_pct,
+                    rtt_ms,
+                    &resolution,
+                    &simulcast_tier,
+                )?;
                 state.quality_samples += 1;
             }
             WebRTCActorMsg::RecordingStart { call_id } => {
                 let encrypted = state.config.recording_encryption;
                 let storage_key = if encrypted {
-                    format!("enc://recordings/{}/{}", call_id, chrono::Utc::now().timestamp())
+                    format!(
+                        "enc://recordings/{}/{}",
+                        call_id,
+                        chrono::Utc::now().timestamp()
+                    )
                 } else {
                     format!("recordings/{}/{}", call_id, chrono::Utc::now().timestamp())
                 };
-                let _ = state.db.start_call_recording(&call_id, &storage_key, encrypted, 0);
+                let _ = state
+                    .db
+                    .start_call_recording(&call_id, &storage_key, encrypted, 0);
                 state.db.set_call_recording(&call_id, true, encrypted)?;
                 state.recordings_started += 1;
             }
@@ -101,7 +144,11 @@ impl Actor for WebRTCActor {
                     let _ = state.db.finalize_call_recording(&call_id, seg.segment_id);
                 }
             }
-            WebRTCActorMsg::ScreenShare { call_id, user_id, active } => {
+            WebRTCActorMsg::ScreenShare {
+                call_id,
+                user_id,
+                active,
+            } => {
                 state.db.set_call_screen_share(&call_id, user_id, active)?;
             }
             WebRTCActorMsg::GetStats { reply_to } => {
@@ -123,11 +170,37 @@ impl Actor for WebRTCActor {
 // NOTE: billing lookup is resolved by caller within CallEnd since the billing
 // row is keyed by host in redb; the actor keeps it simple by scanning once.
 pub enum WebRTCActorMsg {
-    CallStart { call_id: String, caller_id: i64, callee_id: i64, call_type: String },
-    CallEnd { call_id: String, caller_id: i64 },
-    QualityReport { call_id: String, user_id: i64, bitrate_kbps: f64, packet_loss_pct: f64, rtt_ms: f64, resolution: String, simulcast_tier: String },
-    RecordingStart { call_id: String },
-    RecordingStop { call_id: String },
-    ScreenShare { call_id: String, user_id: i64, active: bool },
-    GetStats { reply_to: tokio::sync::oneshot::Sender<serde_json::Value> },
+    CallStart {
+        call_id: String,
+        caller_id: i64,
+        callee_id: i64,
+        call_type: String,
+    },
+    CallEnd {
+        call_id: String,
+        caller_id: i64,
+    },
+    QualityReport {
+        call_id: String,
+        user_id: i64,
+        bitrate_kbps: f64,
+        packet_loss_pct: f64,
+        rtt_ms: f64,
+        resolution: String,
+        simulcast_tier: String,
+    },
+    RecordingStart {
+        call_id: String,
+    },
+    RecordingStop {
+        call_id: String,
+    },
+    ScreenShare {
+        call_id: String,
+        user_id: i64,
+        active: bool,
+    },
+    GetStats {
+        reply_to: tokio::sync::oneshot::Sender<serde_json::Value>,
+    },
 }

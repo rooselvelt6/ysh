@@ -30,8 +30,14 @@ fn create_user(db: &Database, username: &str) -> i64 {
 // OWASP A01: BROKEN ACCESS CONTROL - role elevation / IDOR at data layer.
 #[test]
 fn non_admin_cannot_perform_admin_operations() {
-    let auth_admin = AuthUser { user_id: "1".into(), role: "admin".into() };
-    let auth_user = AuthUser { user_id: "99999".into(), role: "user".into() };
+    let auth_admin = AuthUser {
+        user_id: "1".into(),
+        role: "admin".into(),
+    };
+    let auth_user = AuthUser {
+        user_id: "99999".into(),
+        role: "user".into(),
+    };
 
     // The exact gate replicated from src/api/admin.rs require_admin().
     let gate = |u: &AuthUser| {
@@ -48,10 +54,18 @@ fn non_admin_cannot_perform_admin_operations() {
 #[test]
 fn credential_hashes_are_not_plaintext() {
     let db = setup_db();
-    let u = db.create_user("pwuser", "pw@owasp.com", "supersecretpw").unwrap();
+    let u = db
+        .create_user("pwuser", "pw@owasp.com", "supersecretpw")
+        .unwrap();
     let stored = db.find_user_by_id(u.id).unwrap().unwrap();
-    assert_ne!(stored.password_hash, "supersecretpw", "plaintext password persisted");
-    assert!(stored.password_hash.len() >= 40, "hash too short to be a KDF output");
+    assert_ne!(
+        stored.password_hash, "supersecretpw",
+        "plaintext password persisted"
+    );
+    assert!(
+        stored.password_hash.len() >= 40,
+        "hash too short to be a KDF output"
+    );
 }
 
 #[test]
@@ -71,7 +85,10 @@ fn injection_payloads_are_treated_as_opaque_data() {
     let evil = "admin' OR '1'='1";
     let u = db.create_user(evil, "inj@owasp.com", "h").unwrap();
     let by_name = db.find_user_by_username(evil).unwrap().unwrap();
-    assert_eq!(by_name.id, u.id, "literal match must hit only the literal user");
+    assert_eq!(
+        by_name.id, u.id,
+        "literal match must hit only the literal user"
+    );
     assert!(db.find_user_by_username("admin").unwrap().is_none());
 }
 
@@ -79,7 +96,10 @@ fn injection_payloads_are_treated_as_opaque_data() {
 fn email_and_username_indexes_are_consistent() {
     let db = setup_db();
     let u = db.create_user("uniqueman", "only@owasp.com", "h").unwrap();
-    assert_eq!(db.find_user_by_username("uniqueman").unwrap().unwrap().id, u.id);
+    assert_eq!(
+        db.find_user_by_username("uniqueman").unwrap().unwrap().id,
+        u.id
+    );
     // Re-registering the same email must be refused (unique index enforced).
     assert!(db.create_user("other", "only@owasp.com", "h").is_err());
 }
@@ -107,7 +127,12 @@ fn keyed_hash_rejects_tampered_payloads() {
     let mut claims = parts[1].as_bytes().to_vec();
     let idx = claims.len() / 2;
     claims[idx] ^= 0x01;
-    let tampered = format!("{}.{}.{}", parts[0], String::from_utf8_lossy(&claims), parts[2]);
+    let tampered = format!(
+        "{}.{}.{}",
+        parts[0],
+        String::from_utf8_lossy(&claims),
+        parts[2]
+    );
     let result = jsonwebtoken::decode::<serde_json::Value>(
         &tampered,
         &jsonwebtoken::DecodingKey::from_secret(key),

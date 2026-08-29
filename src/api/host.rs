@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 
 use crate::auth::jwt::AuthUser;
@@ -12,9 +12,10 @@ pub async fn create_or_update_host(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let languages = req["languages"].as_str().unwrap_or("en");
     let hourly_rate = req["hourly_rate"].as_i64().unwrap_or(0);
@@ -51,9 +52,10 @@ pub async fn set_availability(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let available = req["available"].as_bool().unwrap_or(false);
 

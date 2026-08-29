@@ -61,7 +61,11 @@ fn feed_hides_blocked_authors() {
 
     let mid = db.create_moment(author, "Hello world", "", "text").unwrap();
     let feed_before = db.get_moment_feed(viewer, 0, 10).unwrap();
-    assert!(feed_before.iter().any(|m| m["id"] == serde_json::json!(mid)));
+    assert!(
+        feed_before
+            .iter()
+            .any(|m| m["id"] == serde_json::json!(mid))
+    );
 
     db.block_user(viewer, author).unwrap();
     let feed_after = db.get_moment_feed(viewer, 0, 10).unwrap();
@@ -219,10 +223,15 @@ fn shadow_banned_posts_hidden_from_feed_and_search() {
     let author = create_user(&db, "ghost_author");
     let viewer = create_user(&db, "ghost_viewer");
 
-    db.create_moment(author, "Ghosted content", "", "text").unwrap();
+    db.create_moment(author, "Ghosted content", "", "text")
+        .unwrap();
 
     let feed_before = db.get_moment_feed(viewer, 0, 10).unwrap();
-    assert!(feed_before.iter().any(|m| m["content"] == "Ghosted content"));
+    assert!(
+        feed_before
+            .iter()
+            .any(|m| m["content"] == "Ghosted content")
+    );
 
     let search_before = db.search_users("ghost_author", 10).unwrap();
     assert_eq!(search_before.len(), 1);
@@ -314,7 +323,7 @@ fn trust_score_penalizes_bad_behavior() {
     let banned_score = db.compute_trust_score(bad).unwrap();
     assert!(banned_score < bad_score);
 
-    assert!(banned_score >= 0.0 && banned_score <= 100.0);
+    assert!((0.0..=100.0).contains(&banned_score));
 }
 
 #[test]
@@ -343,7 +352,8 @@ fn trust_score_clamps_to_bounds() {
     let reporter = create_user(&db, "trust_reporter2");
 
     for _ in 0..20 {
-        db.create_report(reporter, "user", user, "scam", "spam").unwrap();
+        db.create_report(reporter, "user", user, "scam", "spam")
+            .unwrap();
     }
     db.shadow_ban_user(user, "spam", None).unwrap();
     db.ban_user(user).unwrap();

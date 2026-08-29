@@ -34,6 +34,8 @@ pub struct YshConfig {
     pub jobs: JobsConfig,
     #[serde(default = "default_analytics")]
     pub analytics: AnalyticsConfig,
+    #[serde(default)]
+    pub observability: ObservabilityConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,6 +102,12 @@ pub struct ServerConfig {
     pub port: u16,
     pub workers: usize,
     pub shutdown_timeout_secs: u32,
+    #[serde(default = "default_static_dir")]
+    pub static_dir: String,
+}
+
+fn default_static_dir() -> String {
+    "./frontend/dist".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,13 +147,28 @@ pub struct DdosConfig {
 }
 
 fn default_ddos_rate_limit() -> DdosRateLimit {
-    DdosRateLimit { auth_max_per_minute: 5, api_max_per_minute: 60, ws_max_per_minute: 30, admin_max_per_minute: 120 }
+    DdosRateLimit {
+        auth_max_per_minute: 5,
+        api_max_per_minute: 60,
+        ws_max_per_minute: 30,
+        admin_max_per_minute: 120,
+    }
 }
 fn default_ddos_ip_block() -> DdosIpBlock {
-    DdosIpBlock { auto_block_threshold: 100, auto_block_window_secs: 60, auto_block_duration_secs: 300, max_blocklist_size: 10000 }
+    DdosIpBlock {
+        auto_block_threshold: 100,
+        auto_block_window_secs: 60,
+        auto_block_duration_secs: 300,
+        max_blocklist_size: 10000,
+    }
 }
 fn default_ddos_ws() -> DdosWs {
-    DdosWs { max_connections_per_user: 3, max_message_size_bytes: 65536, heartbeat_timeout_secs: 60, message_rate_per_second: 10 }
+    DdosWs {
+        max_connections_per_user: 3,
+        max_message_size_bytes: 65536,
+        heartbeat_timeout_secs: 60,
+        message_rate_per_second: 10,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -232,16 +255,39 @@ pub struct CallBillingConfig {
 }
 
 fn default_staking() -> StakingConfig {
-    StakingConfig { min_stake: 100, max_stake: 10000000, default_apy: 0.05, min_lock_days: 1, max_lock_days: 365, reward_calc_interval_hours: 24 }
+    StakingConfig {
+        min_stake: 100,
+        max_stake: 10000000,
+        default_apy: 0.05,
+        min_lock_days: 1,
+        max_lock_days: 365,
+        reward_calc_interval_hours: 24,
+    }
 }
 fn default_commission() -> CommissionConfig {
-    CommissionConfig { tier1_pct: 0.40, tier2_pct: 0.20, tier3_pct: 0.10, tier4_pct: 0.05, min_purchase_for_commission: 100 }
+    CommissionConfig {
+        tier1_pct: 0.40,
+        tier2_pct: 0.20,
+        tier3_pct: 0.10,
+        tier4_pct: 0.05,
+        min_purchase_for_commission: 100,
+    }
 }
 fn default_fraud() -> FraudConfig {
-    FraudConfig { velocity_window_secs: 300, max_tx_per_window: 20, max_amount_per_window: 500000, large_tx_threshold: 10000, auto_freeze_on_fraud: true }
+    FraudConfig {
+        velocity_window_secs: 300,
+        max_tx_per_window: 20,
+        max_amount_per_window: 500000,
+        large_tx_threshold: 10000,
+        auto_freeze_on_fraud: true,
+    }
 }
 fn default_call_billing() -> CallBillingConfig {
-    CallBillingConfig { min_cost_per_min: 1, default_cost_per_min: 5, host_earnings_pct: 0.70 }
+    CallBillingConfig {
+        min_cost_per_min: 1,
+        default_cost_per_min: 5,
+        host_earnings_pct: 0.70,
+    }
 }
 
 // ═══════════════════════════════════════════
@@ -535,5 +581,31 @@ pub fn default_analytics() -> AnalyticsConfig {
         enabled: true,
         default_range_days: 30,
         snapshot_retention_days: 90,
+    }
+}
+
+// ═══════════════════════════════════════════
+// FASE 16: OBSERVABILITY (metrics + logging)
+// ═══════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ObservabilityConfig {
+    /// Expose `/metrics` en formato Prometheus.
+    pub metrics_enabled: bool,
+    /// Bind de las métricas Prometheus (0.0.0.0:9091 al desplegar con Docker).
+    pub metrics_host: String,
+    pub metrics_port: u16,
+    /// Intervalo de snapshot de métricas de negocio (segundos).
+    pub snapshot_interval_secs: u64,
+}
+
+impl Default for ObservabilityConfig {
+    fn default() -> Self {
+        Self {
+            metrics_enabled: true,
+            metrics_host: "0.0.0.0".into(),
+            metrics_port: 9091,
+            snapshot_interval_secs: 15,
+        }
     }
 }

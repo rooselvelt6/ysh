@@ -1,8 +1,8 @@
 use axum::{
-    extract::{Path, Query, State},
-    http::{header, StatusCode},
-    response::{IntoResponse, Response},
     Json,
+    extract::{Path, Query, State},
+    http::{StatusCode, header},
+    response::{IntoResponse, Response},
 };
 use std::collections::HashMap;
 
@@ -41,7 +41,10 @@ pub async fn realtime_analytics(
     drop(rooms);
 
     let day = chrono::Utc::now().format("%Y-%m-%d").to_string();
-    let revenue = state.db.sum_transactions_range(&day, &day).map_err(http_err)?;
+    let revenue = state
+        .db
+        .sum_transactions_range(&day, &day)
+        .map_err(http_err)?;
     let gifts = state.db.sum_gifts_range(&day, &day).map_err(http_err)?;
 
     Ok(Json(serde_json::json!({
@@ -96,7 +99,10 @@ pub async fn hosts_leaderboard(
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     require_admin(&auth)?;
-    let limit: i64 = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(10);
+    let limit: i64 = params
+        .get("limit")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10);
     let hosts = state.db.get_host_leaderboard(limit).map_err(http_err)?;
     Ok(Json(serde_json::json!({ "leaderboard": hosts })))
 }
@@ -178,26 +184,34 @@ pub async fn system_health(
     require_admin(&auth)?;
     let uptime = std::fs::read_to_string("/proc/uptime")
         .ok()
-        .and_then(|s| s.split_whitespace().next().map(|v| v.parse::<f64>().unwrap_or(0.0)))
+        .and_then(|s| {
+            s.split_whitespace()
+                .next()
+                .map(|v| v.parse::<f64>().unwrap_or(0.0))
+        })
         .unwrap_or(0.0);
     let (mem_total, mem_available) = read_proc_meminfo().unwrap_or((0, 0));
     let cache = state.cache.stats();
     let db_size = state.db.db_size().map_err(http_err)?;
     let threads = match std::fs::read_to_string("/proc/self/status") {
-            Ok(s) => s
-                .lines()
-                .find(|l| l.starts_with("Threads:"))
-                .and_then(|l| l.split_whitespace().last().map(|v| v.parse::<u64>().unwrap_or(0)))
-                .unwrap_or(0),
-            Err(_) => 0,
-        };
+        Ok(s) => s
+            .lines()
+            .find(|l| l.starts_with("Threads:"))
+            .and_then(|l| {
+                l.split_whitespace()
+                    .last()
+                    .map(|v| v.parse::<u64>().unwrap_or(0))
+            })
+            .unwrap_or(0),
+        Err(_) => 0,
+    };
 
     Ok(Json(serde_json::json!({
         "uptime_secs": (uptime * 10.0).round() / 10.0,
         "memory": {
             "total_bytes": mem_total,
             "available_bytes": mem_available,
-            "used_pct": if mem_total > 0 { (100.0 - (mem_available as f64 / mem_total as f64 * 100.0) as f64) * 100.0 / 100.0 } else { 0.0 },
+            "used_pct": if mem_total > 0 { (100.0 - (mem_available as f64 / mem_total as f64 * 100.0)) * 100.0 / 100.0 } else { 0.0 },
         },
         "cpu_usage_pct": cpu_usage_pct(),
         "cache": { "entries": cache.total_entries, "bytes": cache.total_bytes },
@@ -214,7 +228,10 @@ pub async fn analytics_snapshots(
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     require_admin(&auth)?;
-    let limit: i64 = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(30);
+    let limit: i64 = params
+        .get("limit")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30);
     let rows = state.db.list_analytics_snapshots(limit).map_err(http_err)?;
     Ok(Json(serde_json::json!({ "snapshots": rows })))
 }
@@ -230,15 +247,16 @@ fn to_csv(rows: &[serde_json::Value]) -> String {
     let mut out = String::new();
     let headers: Vec<&str> = rows
         .first()
-        .map(|r| r.as_object().map(|o| o.keys().map(|k| k.as_str()).collect()).unwrap_or_default())
+        .map(|r| {
+            r.as_object()
+                .map(|o| o.keys().map(|k| k.as_str()).collect())
+                .unwrap_or_default()
+        })
         .unwrap_or_default();
     out.push_str(&headers.join(","));
     out.push('\n');
     for row in rows {
-        let cells: Vec<String> = headers
-            .iter()
-            .map(|h| csv_cell(&row[h]))
-            .collect();
+        let cells: Vec<String> = headers.iter().map(|h| csv_cell(&row[h])).collect();
         out.push_str(&cells.join(","));
         out.push('\n');
     }
@@ -254,7 +272,10 @@ pub async fn export_analytics(
     require_admin(&auth)?;
     let dataset = params.get("dataset").map(String::as_str).unwrap_or("users");
     let format = params.get("format").map(String::as_str).unwrap_or("json");
-    let days = params.get("days").and_then(|s| s.parse().ok()).unwrap_or(30);
+    let days = params
+        .get("days")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30);
 
     let rows: Vec<serde_json::Value> = match dataset {
         "users" => state
@@ -276,7 +297,12 @@ pub async fn export_analytics(
             .cloned()
             .unwrap_or_default(),
         "snapshots" => state.db.list_analytics_snapshots(90).map_err(http_err)?,
-        other => return Err((StatusCode::BAD_REQUEST, format!("Unknown dataset: {}", other))),
+        other => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("Unknown dataset: {}", other),
+            ));
+        }
     };
 
     match format {
@@ -290,11 +316,13 @@ pub async fn export_analytics(
                     format!("attachment; filename=\"{}.csv\"", dataset),
                 )
                 .body(axum::body::Body::from(body))
-                .unwrap()
-                .into())
+                .unwrap())
         }
         "json" => Ok(Json(serde_json::json!({ "dataset": dataset, "rows": rows })).into_response()),
-        other => Err((StatusCode::BAD_REQUEST, format!("Unknown format: {}", other))),
+        other => Err((
+            StatusCode::BAD_REQUEST,
+            format!("Unknown format: {}", other),
+        )),
     }
 }
 
@@ -307,7 +335,13 @@ pub async fn set_my_region(
     if region.is_empty() || region.len() > 64 {
         return Err((StatusCode::BAD_REQUEST, "Invalid region".into()));
     }
-    let user_id = auth.user_id.parse::<i64>().map_err(|_| (StatusCode::BAD_REQUEST, "Invalid user".into()))?;
-    state.db.set_user_region(user_id, &region).map_err(http_err)?;
+    let user_id = auth
+        .user_id
+        .parse::<i64>()
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid user".into()))?;
+    state
+        .db
+        .set_user_region(user_id, &region)
+        .map_err(http_err)?;
     Ok(Json(serde_json::json!({ "region": region })))
 }

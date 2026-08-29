@@ -43,8 +43,7 @@ impl I18nEngine {
     /// overrides (parsed as an extra FTL resource) on top of the base catalog.
     pub fn bundle_for(&self, locale: &str) -> Option<FluentBundle<FluentResource>> {
         let source = self.base_source(locale)?;
-        let id: unic_langid::LanguageIdentifier =
-            locale.parse().ok()?;
+        let id: unic_langid::LanguageIdentifier = locale.parse().ok()?;
 
         let mut bundle = FluentBundle::new(vec![id]);
         let resource = FluentResource::try_new(source.to_string()).ok()?;
@@ -55,16 +54,16 @@ impl I18nEngine {
         if let Ok(guard) = self.overrides.lock() {
             let mut extra = String::new();
             for (k, v) in guard.iter() {
-                if let Some((l, key)) = k.split_once("::") {
-                    if l == locale {
-                        extra.push_str(&format!("{key} = {v}\n"));
-                    }
+                if let Some((l, key)) = k.split_once("::")
+                    && l == locale
+                {
+                    extra.push_str(&format!("{key} = {v}\n"));
                 }
             }
-            if !extra.is_empty() {
-                if let Some(over) = FluentResource::try_new(extra).ok() {
-                    bundle.add_resource_overriding(over);
-                }
+            if !extra.is_empty()
+                && let Ok(over) = FluentResource::try_new(extra)
+            {
+                bundle.add_resource_overriding(over);
             }
         }
 
@@ -136,10 +135,10 @@ impl I18nEngine {
         // but apply them explicitly too for keys with only an override.
         if let Ok(guard) = self.overrides.lock() {
             for (k, v) in guard.iter() {
-                if let Some((l, key)) = k.split_once("::") {
-                    if l == locale {
-                        out.insert(key.to_string(), v.clone());
-                    }
+                if let Some((l, key)) = k.split_once("::")
+                    && l == locale
+                {
+                    out.insert(key.to_string(), v.clone());
                 }
             }
         }
@@ -196,14 +195,17 @@ mod tests {
 
         // Arabic has a distinct "two" plural form.
         let two_ar = e.translate("ar", "notification-count", &[("n", Arg::Number(2))]);
-        assert!(two_ar.contains("إشعاران"), "arabic dual form not selected: {two_ar}");
+        assert!(
+            two_ar.contains("إشعاران"),
+            "arabic dual form not selected: {two_ar}"
+        );
     }
 
     #[test]
     fn full_catalog_includes_target_locale() {
         let e = engine();
         let es = e.full_catalog("es");
-        assert!(es.get("nav-wallet").is_some());
+        assert!(es.contains_key("nav-wallet"));
         assert_eq!(es.get("nav-wallet").unwrap(), "Cartera");
         let ar = e.full_catalog("ar");
         assert_eq!(ar.get("auth-login").unwrap(), "تسجيل الدخول");
@@ -214,7 +216,10 @@ mod tests {
         let e = engine();
         let key = "nav-wallet";
         let fk = format!("es::{key}");
-        e.overrides.lock().unwrap().insert(fk, "Mi Cartera".to_string());
+        e.overrides
+            .lock()
+            .unwrap()
+            .insert(fk, "Mi Cartera".to_string());
         assert_eq!(e.translate("es", key, &[]), "Mi Cartera");
         assert_eq!(e.full_catalog("es").get(key).unwrap(), "Mi Cartera");
         // Other locale unaffected.

@@ -1,6 +1,9 @@
 use anyhow::Result;
-use redb::{Database as RedbDatabase, TableDefinition, MultimapTableDefinition, ReadableTable, ReadableMultimapTable, ReadableDatabase, ReadableTableMetadata};
 use rand::Rng;
+use redb::{
+    Database as RedbDatabase, MultimapTableDefinition, ReadableDatabase, ReadableMultimapTable,
+    ReadableTable, ReadableTableMetadata, TableDefinition,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Mutex;
@@ -23,67 +26,94 @@ const T_COUNTER: TableDefinition<&str, &str> = TableDefinition::new("counters");
 const T_I18N: TableDefinition<&str, &str> = TableDefinition::new("i18n_overrides");
 
 // Multimap tables (one-to-many)
-const MM_RECOVERY: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("recovery_codes");
-const MM_CONSENT: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("consent_records");
+const MM_RECOVERY: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("recovery_codes");
+const MM_CONSENT: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("consent_records");
 const MM_DEVICE: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("devices");
-const MM_AGENCY_MEMBER: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("agency_members");
-const MM_TRANSACTION: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("transactions");
+const MM_AGENCY_MEMBER: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("agency_members");
+const MM_TRANSACTION: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("transactions");
 const MM_GIFT: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("gifts");
 const MM_MOMENT: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("moments");
-const MM_MOMENT_LIKE: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("moment_likes");
-const MM_MOMENT_COMMENT: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("moment_comments");
-const MM_NOTIFICATION: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("notifications");
-const MM_PUSH_TOKEN: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("push_tokens");
+const MM_MOMENT_LIKE: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("moment_likes");
+const MM_MOMENT_COMMENT: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("moment_comments");
+const MM_NOTIFICATION: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("notifications");
+const MM_PUSH_TOKEN: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("push_tokens");
 const MM_MSG: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("messages");
-const MM_CHAT_PARTICIPANT: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("chat_participants");
-const MM_MATCH_QUEUE: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("matching_queue");
-const MM_STAKING: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("staking_list");
+const MM_CHAT_PARTICIPANT: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("chat_participants");
+const MM_MATCH_QUEUE: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("matching_queue");
+const MM_STAKING: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("staking_list");
 const MM_REFERRAL: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("referrals");
-const MM_CALL_BILLING: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("call_billing");
-const MM_COMMISSION: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("commissions");
+const MM_CALL_BILLING: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("call_billing");
+const MM_COMMISSION: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("commissions");
 const MM_PAYOUT: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("payouts");
 const MM_FRAUD: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("fraud_alerts");
 const MM_RECEIPT: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("receipts");
 const MM_NFT: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("nft_gifts");
-const MM_GIFT_CATALOG: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("gift_catalog");
+const MM_GIFT_CATALOG: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("gift_catalog");
 
 // Index tables
 const IX_USER_BY_USERNAME: TableDefinition<&str, &str> = TableDefinition::new("ix_user_username");
 const IX_USER_BY_EMAIL: TableDefinition<&str, &str> = TableDefinition::new("ix_user_email");
 const IX_TX_USER: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("ix_tx_user");
-const IX_GIFT_FROM: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("ix_gift_from");
+const IX_GIFT_FROM: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("ix_gift_from");
 const IX_GIFT_TO: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("ix_gift_to");
 const IX_REFERRAL_CODE: TableDefinition<&str, &str> = TableDefinition::new("ix_referral_code");
-const IX_NOTIF_USER: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("ix_notif_user");
-const IX_MSG_SESSION: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("ix_msg_session");
-const IX_CHAT_USER: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("ix_chat_user");
-const IX_NFT_USER: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("ix_nft_user");
+const IX_NOTIF_USER: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("ix_notif_user");
+const IX_MSG_SESSION: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("ix_msg_session");
+const IX_CHAT_USER: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("ix_chat_user");
+const IX_NFT_USER: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("ix_nft_user");
 
 // Phase 13: Social + Moderation tables
 const T_TRUST: TableDefinition<&str, &str> = TableDefinition::new("trust_scores");
 const T_REPUTATION: TableDefinition<&str, &str> = TableDefinition::new("reputation");
 const MM_BLOCK: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("user_blocks");
 const MM_REPORT: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("reports");
-const MM_BADGE: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("verification_badges");
+const MM_BADGE: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("verification_badges");
 const MM_RATING: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("user_ratings");
-const MM_CONTENT_FLAG: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("content_flags");
-const MM_MOD_QUEUE: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("moderation_queue");
+const MM_CONTENT_FLAG: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("content_flags");
+const MM_MOD_QUEUE: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("moderation_queue");
 const MM_APPEAL: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("appeals");
 const MM_SHADOW: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("shadow_bans");
 
 // Phase 8: WebRTC + Streaming tables
 const T_CALL: TableDefinition<&str, &str> = TableDefinition::new("calls");
-const MM_CALL_USER: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("mm_call_user");
-const MM_CALL_QUALITY: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("call_quality");
-const MM_CALL_RECORDING: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("call_recordings");
-const MM_USER_ACTIVITY: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("user_activity");
-const MM_ANALYTICS_DAY: MultimapTableDefinition<&str, &str> = MultimapTableDefinition::new("analytics_days");
+const MM_CALL_USER: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("mm_call_user");
+const MM_CALL_QUALITY: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("call_quality");
+const MM_CALL_RECORDING: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("call_recordings");
+const MM_USER_ACTIVITY: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("user_activity");
+const MM_ANALYTICS_DAY: MultimapTableDefinition<&str, &str> =
+    MultimapTableDefinition::new("analytics_days");
 
 // ═══════════════════════════════════════════
 // DATA STRUCTS (serde)
 // ═══════════════════════════════════════════
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct User {
     pub id: i64,
     pub username: String,
@@ -342,11 +372,11 @@ pub struct BlockRecord {
 pub struct Report {
     pub id: i64,
     pub reporter_id: i64,
-    pub target_type: String,      // user | moment | message | host | agency
+    pub target_type: String, // user | moment | message | host | agency
     pub target_id: i64,
-    pub category: String,         // spam | nsfw | scam | harassment | violence | fraud | other
+    pub category: String, // spam | nsfw | scam | harassment | violence | fraud | other
     pub description: String,
-    pub status: String,           // pending | reviewed | actioned | dismissed
+    pub status: String, // pending | reviewed | actioned | dismissed
     pub created_at: String,
     pub reviewed_at: Option<String>,
     pub reviewed_by: Option<i64>,
@@ -356,7 +386,7 @@ pub struct Report {
 pub struct VerificationBadge {
     pub id: i64,
     pub user_id: i64,
-    pub badge_type: String,       // email_verified | identity_verified | agency | host | staff
+    pub badge_type: String, // email_verified | identity_verified | agency | host | staff
     pub granted_at: String,
     pub active: bool,
 }
@@ -365,20 +395,20 @@ pub struct VerificationBadge {
 pub struct Rating {
     pub id: i64,
     pub rater_id: i64,
-    pub score: f64,               // 1.0 – 5.0
+    pub score: f64, // 1.0 – 5.0
     pub created_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentFlag {
     pub id: i64,
-    pub target_type: String,      // moment | message | user | host
+    pub target_type: String, // moment | message | user | host
     pub target_id: i64,
-    pub flag_type: String,        // nsfw | spam | scam | abuse | other
-    pub source: String,           // auto | manual
-    pub severity: f64,            // 0.0 – 1.0
+    pub flag_type: String, // nsfw | spam | scam | abuse | other
+    pub source: String,    // auto | manual
+    pub severity: f64,     // 0.0 – 1.0
     pub description: String,
-    pub status: String,           // pending | reviewed | actioned | dismissed
+    pub status: String, // pending | reviewed | actioned | dismissed
     pub created_at: String,
     pub resolved_at: Option<String>,
     pub resolved_by: Option<i64>,
@@ -387,10 +417,10 @@ pub struct ContentFlag {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModQueueItem {
     pub id: i64,
-    pub item_type: String,        // report | content_flag | appeal | user
+    pub item_type: String, // report | content_flag | appeal | user
     pub reference_id: i64,
     pub severity: f64,
-    pub status: String,           // pending | reviewed | actioned | dismissed
+    pub status: String, // pending | reviewed | actioned | dismissed
     pub notes: String,
     pub created_at: String,
 }
@@ -399,10 +429,10 @@ pub struct ModQueueItem {
 pub struct Appeal {
     pub id: i64,
     pub user_id: i64,
-    pub target_type: String,      // ban | shadow_ban | content_flag
+    pub target_type: String, // ban | shadow_ban | content_flag
     pub target_id: i64,
     pub reason: String,
-    pub status: String,           // open | approved | rejected
+    pub status: String, // open | approved | rejected
     pub created_at: String,
     pub reviewed_at: Option<String>,
     pub reviewed_by: Option<i64>,
@@ -433,9 +463,9 @@ pub struct CallRecord {
     pub call_id: String,
     pub room_id: String,
     pub host_id: i64,
-    pub call_type: String,       // p2p | flash | duo | group | live
+    pub call_type: String, // p2p | flash | duo | group | live
     pub participants: Vec<i64>,
-    pub status: String,          // ringing | active | ended
+    pub status: String, // ringing | active | ended
     pub started_at: String,
     pub ended_at: Option<String>,
     pub duration_secs: i64,
@@ -465,10 +495,10 @@ pub struct CallRecording {
     pub segment_id: i64,
     pub started_at: String,
     pub ended_at: Option<String>,
-    pub storage_key: String,   // encrypted reference to the recording blob
+    pub storage_key: String, // encrypted reference to the recording blob
     pub size_bytes: i64,
     pub encrypted: bool,
-    pub status: String,        // recording | finalized
+    pub status: String, // recording | finalized
 }
 
 // ═══════════════════════════════════════════
@@ -540,8 +570,7 @@ impl Database {
     #[allow(dead_code)]
     pub fn new_encrypted(path: &str, key: &[u8; 32]) -> Result<Self> {
         let backend = crate::encryption::EncryptedBackend::open(path, key)?;
-        let inner = RedbDatabase::builder()
-            .create_with_backend(backend)?;
+        let inner = RedbDatabase::builder().create_with_backend(backend)?;
         let db = Self {
             inner,
             next_id: Mutex::new(1),
@@ -557,11 +586,73 @@ impl Database {
     fn init_tables(&self) -> Result<()> {
         let txn = self.inner.begin_write()?;
         // KV tables
-        for t in [T_USER, T_WALLET, T_PROFILE, T_HOST, T_AGENCY, T_CHAT_SESSION, T_NOTIF_PREF, T_STAKE, T_SPENDING, T_COUNTER, T_I18N, IX_USER_BY_USERNAME, IX_USER_BY_EMAIL, IX_REFERRAL_CODE, T_TRUST, T_REPUTATION, T_CALL] {
+        for t in [
+            T_USER,
+            T_WALLET,
+            T_PROFILE,
+            T_HOST,
+            T_AGENCY,
+            T_CHAT_SESSION,
+            T_NOTIF_PREF,
+            T_STAKE,
+            T_SPENDING,
+            T_COUNTER,
+            T_I18N,
+            IX_USER_BY_USERNAME,
+            IX_USER_BY_EMAIL,
+            IX_REFERRAL_CODE,
+            T_TRUST,
+            T_REPUTATION,
+            T_CALL,
+        ] {
             txn.open_table(t)?;
         }
         // Multimap tables
-        for t in [MM_RECOVERY, MM_CONSENT, MM_DEVICE, MM_AGENCY_MEMBER, MM_TRANSACTION, MM_GIFT, MM_MOMENT, MM_MOMENT_LIKE, MM_MOMENT_COMMENT, MM_NOTIFICATION, MM_PUSH_TOKEN, MM_MSG, MM_CHAT_PARTICIPANT, MM_MATCH_QUEUE, MM_STAKING, MM_REFERRAL, MM_CALL_BILLING, MM_COMMISSION, MM_PAYOUT, MM_FRAUD, MM_RECEIPT, MM_NFT, MM_GIFT_CATALOG, IX_TX_USER, IX_GIFT_FROM, IX_GIFT_TO, IX_NOTIF_USER, IX_MSG_SESSION, IX_CHAT_USER, IX_NFT_USER, MM_BLOCK, MM_REPORT, MM_BADGE, MM_RATING, MM_CONTENT_FLAG, MM_MOD_QUEUE, MM_APPEAL, MM_SHADOW, MM_CALL_USER, MM_CALL_QUALITY, MM_CALL_RECORDING, MM_USER_ACTIVITY, MM_ANALYTICS_DAY] {
+        for t in [
+            MM_RECOVERY,
+            MM_CONSENT,
+            MM_DEVICE,
+            MM_AGENCY_MEMBER,
+            MM_TRANSACTION,
+            MM_GIFT,
+            MM_MOMENT,
+            MM_MOMENT_LIKE,
+            MM_MOMENT_COMMENT,
+            MM_NOTIFICATION,
+            MM_PUSH_TOKEN,
+            MM_MSG,
+            MM_CHAT_PARTICIPANT,
+            MM_MATCH_QUEUE,
+            MM_STAKING,
+            MM_REFERRAL,
+            MM_CALL_BILLING,
+            MM_COMMISSION,
+            MM_PAYOUT,
+            MM_FRAUD,
+            MM_RECEIPT,
+            MM_NFT,
+            MM_GIFT_CATALOG,
+            IX_TX_USER,
+            IX_GIFT_FROM,
+            IX_GIFT_TO,
+            IX_NOTIF_USER,
+            IX_MSG_SESSION,
+            IX_CHAT_USER,
+            IX_NFT_USER,
+            MM_BLOCK,
+            MM_REPORT,
+            MM_BADGE,
+            MM_RATING,
+            MM_CONTENT_FLAG,
+            MM_MOD_QUEUE,
+            MM_APPEAL,
+            MM_SHADOW,
+            MM_CALL_USER,
+            MM_CALL_QUALITY,
+            MM_CALL_RECORDING,
+            MM_USER_ACTIVITY,
+            MM_ANALYTICS_DAY,
+        ] {
             txn.open_multimap_table(t)?;
         }
         txn.commit()?;
@@ -573,7 +664,9 @@ impl Database {
         let txn = self.inner.begin_write().unwrap();
         let next = {
             let counters = txn.open_table(T_COUNTER).unwrap();
-            let current = counters.get(table).unwrap()
+            let current = counters
+                .get(table)
+                .unwrap()
                 .and_then(|v| v.value().parse::<i64>().ok())
                 .unwrap_or(0);
             current + 1
@@ -586,7 +679,11 @@ impl Database {
         next
     }
 
-    fn get_json<T: for<'de> Deserialize<'de>>(&self, table: TableDefinition<&str, &str>, key: &str) -> Result<Option<T>> {
+    fn get_json<T: for<'de> Deserialize<'de>>(
+        &self,
+        table: TableDefinition<&str, &str>,
+        key: &str,
+    ) -> Result<Option<T>> {
         let txn = self.inner.begin_read()?;
         let t = txn.open_table(table)?;
         match t.get(key)? {
@@ -595,8 +692,16 @@ impl Database {
         }
     }
 
-    fn put_json<T: Serialize>(&self, table: TableDefinition<&str, &str>, key: &str, val: &T) -> Result<()> {
-        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+    fn put_json<T: Serialize>(
+        &self,
+        table: TableDefinition<&str, &str>,
+        key: &str,
+        val: &T,
+    ) -> Result<()> {
+        let _lock = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         {
             let mut t = txn.open_table(table)?;
@@ -606,8 +711,16 @@ impl Database {
         Ok(())
     }
 
-    fn mm_add(&self, table: MultimapTableDefinition<&str, &str>, key: &str, val: &str) -> Result<()> {
-        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+    fn mm_add(
+        &self,
+        table: MultimapTableDefinition<&str, &str>,
+        key: &str,
+        val: &str,
+    ) -> Result<()> {
+        let _lock = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         {
             let mut t = txn.open_multimap_table(table)?;
@@ -617,7 +730,11 @@ impl Database {
         Ok(())
     }
 
-    fn mm_get_all(&self, table: MultimapTableDefinition<&str, &str>, key: &str) -> Result<Vec<String>> {
+    fn mm_get_all(
+        &self,
+        table: MultimapTableDefinition<&str, &str>,
+        key: &str,
+    ) -> Result<Vec<String>> {
         let txn = self.inner.begin_read()?;
         let t = txn.open_multimap_table(table)?;
         let iter = t.get(key)?;
@@ -633,12 +750,17 @@ impl Database {
         let t = txn.open_multimap_table(table)?;
         let iter = t.get(key)?;
         let mut count = 0;
-        for _ in iter { count += 1; }
+        for _ in iter {
+            count += 1;
+        }
         Ok(count)
     }
 
     fn mm_remove_all(&self, table: MultimapTableDefinition<&str, &str>, key: &str) -> Result<()> {
-        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+        let _lock = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         {
             let mut t = txn.open_multimap_table(table)?;
@@ -648,8 +770,16 @@ impl Database {
         Ok(())
     }
 
-    fn mm_remove_one(&self, table: MultimapTableDefinition<&str, &str>, key: &str, val: &str) -> Result<bool> {
-        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+    fn mm_remove_one(
+        &self,
+        table: MultimapTableDefinition<&str, &str>,
+        key: &str,
+        val: &str,
+    ) -> Result<bool> {
+        let _lock = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         let removed = {
             let mut t = txn.open_multimap_table(table)?;
@@ -659,7 +789,10 @@ impl Database {
         Ok(removed)
     }
 
-    fn mm_get_all_entries(&self, table: MultimapTableDefinition<&str, &str>) -> Result<Vec<(String, String)>> {
+    fn mm_get_all_entries(
+        &self,
+        table: MultimapTableDefinition<&str, &str>,
+    ) -> Result<Vec<(String, String)>> {
         let txn = self.inner.begin_read()?;
         let t = txn.open_multimap_table(table)?;
         let mut results = Vec::new();
@@ -718,7 +851,9 @@ impl Database {
     }
 
     pub fn user_exists(&self, username: &str, email: &str) -> Result<bool> {
-        let has_user = self.get_json::<String>(IX_USER_BY_USERNAME, username)?.is_some();
+        let has_user = self
+            .get_json::<String>(IX_USER_BY_USERNAME, username)?
+            .is_some();
         let has_email = self.get_json::<String>(IX_USER_BY_EMAIL, email)?.is_some();
         Ok(has_user || has_email)
     }
@@ -784,7 +919,11 @@ impl Database {
         self.mm_remove_all(MM_RECOVERY, &user_id.to_string())?;
         for (code_hash, used) in codes {
             let id = self.next_seq("recovery_codes");
-            let rc = RecoveryCode { id, code_hash: code_hash.clone(), used: *used };
+            let rc = RecoveryCode {
+                id,
+                code_hash: code_hash.clone(),
+                used: *used,
+            };
             self.mm_add(MM_RECOVERY, &user_id.to_string(), &to_json(&rc))?;
         }
         Ok(())
@@ -792,7 +931,11 @@ impl Database {
 
     pub fn get_recovery_codes(&self, user_id: i64) -> Result<Vec<RecoveryCode>> {
         let entries = self.mm_get_all(MM_RECOVERY, &user_id.to_string())?;
-        entries.iter().filter_map(|s| serde_json::from_str(s).ok()).collect::<Vec<_>>().pipe(Ok)
+        entries
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect::<Vec<_>>()
+            .pipe(Ok)
     }
 
     pub fn mark_recovery_code_used(&self, user_id: i64, code_id: i64) -> Result<()> {
@@ -800,7 +943,9 @@ impl Database {
         self.mm_remove_all(MM_RECOVERY, &user_id.to_string())?;
         for entry in &entries {
             if let Ok(mut rc) = serde_json::from_str::<RecoveryCode>(entry) {
-                if rc.id == code_id { rc.used = true; }
+                if rc.id == code_id {
+                    rc.used = true;
+                }
                 self.mm_add(MM_RECOVERY, &user_id.to_string(), &to_json(&rc))?;
             }
         }
@@ -828,22 +973,36 @@ impl Database {
         self.mm_remove_all(MM_RECOVERY, &user_id.to_string())?;
         self.mm_remove_all(MM_CONSENT, &user_id.to_string())?;
         self.mm_remove_all(MM_DEVICE, &user_id.to_string())?;
-        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+        let _lock = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
-        { let mut t = txn.open_table(T_USER)?; t.remove(user_id.to_string().as_str())?; }
+        {
+            let mut t = txn.open_table(T_USER)?;
+            t.remove(user_id.to_string().as_str())?;
+        }
         txn.commit()?;
         Ok(())
     }
 
     pub fn record_consent(&self, user_id: i64, consent_type: &str, granted: bool) -> Result<()> {
         let id = self.next_seq("consent_records");
-        let cr = ConsentRecord { id, consent_type: consent_type.to_string(), granted, created_at: now() };
+        let cr = ConsentRecord {
+            id,
+            consent_type: consent_type.to_string(),
+            granted,
+            created_at: now(),
+        };
         self.mm_add(MM_CONSENT, &user_id.to_string(), &to_json(&cr))
     }
 
     pub fn get_consent_history(&self, user_id: i64) -> Result<Vec<ConsentRecord>> {
-        self.mm_get_all(MM_CONSENT, &user_id.to_string())?.iter()
-            .filter_map(|s| serde_json::from_str(s).ok()).collect::<Vec<_>>().pipe(Ok)
+        self.mm_get_all(MM_CONSENT, &user_id.to_string())?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect::<Vec<_>>()
+            .pipe(Ok)
     }
 
     pub fn set_do_not_sell(&self, user_id: i64, value: bool) -> Result<()> {
@@ -884,8 +1043,14 @@ impl Database {
         let mut db = RedbDatabase::create(&self.db_path)?;
         let result = db.check_integrity()?;
         let (status, message) = match result {
-            true => (IntegrityStatus::Ok, "Database integrity check passed".into()),
-            false => (IntegrityStatus::Repaired, "Database was repaired during integrity check".into()),
+            true => (
+                IntegrityStatus::Ok,
+                "Database integrity check passed".into(),
+            ),
+            false => (
+                IntegrityStatus::Repaired,
+                "Database was repaired during integrity check".into(),
+            ),
         };
         Ok(IntegrityReport { status, message })
     }
@@ -928,7 +1093,9 @@ impl Database {
         let txn = self.inner.begin_read()?;
         let t = txn.open_table(T_USER)?;
         let mut count = 0;
-        for _ in t.iter()? { count += 1; }
+        for _ in t.iter()? {
+            count += 1;
+        }
         Ok(count)
     }
 
@@ -936,11 +1103,20 @@ impl Database {
         let txn = self.inner.begin_read()?;
         let t = txn.open_table(T_CHAT_SESSION)?;
         let mut count = 0;
-        for _ in t.iter()? { count += 1; }
+        for _ in t.iter()? {
+            count += 1;
+        }
         Ok(count)
     }
 
-    pub fn update_user_profile(&self, user_id: i64, display_name: &str, bio: &str, avatar_url: &str, country: &str) -> Result<()> {
+    pub fn update_user_profile(
+        &self,
+        user_id: i64,
+        display_name: &str,
+        bio: &str,
+        avatar_url: &str,
+        country: &str,
+    ) -> Result<()> {
         let profile = serde_json::json!({
             "user_id": user_id, "display_name": display_name, "bio": bio,
             "avatar_url": avatar_url, "country": country, "created_at": now()
@@ -965,12 +1141,16 @@ impl Database {
         for entry in t.iter()? {
             let (_, v) = entry?;
             if let Ok(user) = serde_json::from_str::<User>(v.value()) {
-                if shadow_ids.contains(&user.id) { continue; }
+                if shadow_ids.contains(&user.id) {
+                    continue;
+                }
                 if user.username.to_lowercase().contains(&pattern) {
                     results.push(serde_json::json!({
                         "id": user.id, "username": user.username, "created_at": user.created_at
                     }));
-                    if results.len() as i64 >= limit { break; }
+                    if results.len() as i64 >= limit {
+                        break;
+                    }
                 }
             }
         }
@@ -993,12 +1173,17 @@ impl Database {
         for entry in t.iter()? {
             let (_, v) = entry?;
             if let Ok(user) = serde_json::from_str::<User>(v.value()) {
-                if skipped < offset { skipped += 1; continue; }
+                if skipped < offset {
+                    skipped += 1;
+                    continue;
+                }
                 results.push(serde_json::json!({
                     "id": user.id, "username": user.username, "email": user.email,
                     "role": user.role, "created_at": user.created_at, "kyc_level": user.kyc_level,
                 }));
-                if results.len() as i64 >= limit { break; }
+                if results.len() as i64 >= limit {
+                    break;
+                }
             }
         }
         Ok(results)
@@ -1040,15 +1225,23 @@ impl Database {
     }
 
     pub fn get_agency_members(&self, agency_id: i64) -> Result<Vec<serde_json::Value>> {
-        self.mm_get_all(MM_AGENCY_MEMBER, &agency_id.to_string())?.iter()
-            .filter_map(|s| serde_json::from_str(s).ok()).collect::<Vec<_>>().pipe(Ok)
+        self.mm_get_all(MM_AGENCY_MEMBER, &agency_id.to_string())?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect::<Vec<_>>()
+            .pipe(Ok)
     }
 
     // ═══════════════════════════════════════════
     // HOST
     // ═══════════════════════════════════════════
 
-    pub fn create_host_profile(&self, user_id: i64, languages: &str, hourly_rate: i64) -> Result<()> {
+    pub fn create_host_profile(
+        &self,
+        user_id: i64,
+        languages: &str,
+        hourly_rate: i64,
+    ) -> Result<()> {
         let host = serde_json::json!({
             "user_id": user_id, "languages": languages, "hourly_rate": hourly_rate,
             "available": false, "total_calls": 0, "rating": 0.0
@@ -1075,7 +1268,9 @@ impl Database {
         for entry in t.iter()? {
             let (_, v) = entry?;
             if let Ok(host) = serde_json::from_str::<serde_json::Value>(v.value()) {
-                if available_only && host["available"] != serde_json::json!(true) { continue; }
+                if available_only && host["available"] != serde_json::json!(true) {
+                    continue;
+                }
                 results.push(host);
             }
         }
@@ -1087,8 +1282,17 @@ impl Database {
     // ═══════════════════════════════════════════
 
     pub fn ensure_wallet(&self, user_id: i64) -> Result<()> {
-        if self.get_json::<Wallet>(T_WALLET, &user_id.to_string())?.is_none() {
-            let w = Wallet { user_id, balance: 0, frozen: false, created_at: now(), updated_at: now() };
+        if self
+            .get_json::<Wallet>(T_WALLET, &user_id.to_string())?
+            .is_none()
+        {
+            let w = Wallet {
+                user_id,
+                balance: 0,
+                frozen: false,
+                created_at: now(),
+                updated_at: now(),
+            };
             self.put_json(T_WALLET, &user_id.to_string(), &w)?;
         }
         Ok(())
@@ -1102,21 +1306,45 @@ impl Database {
     }
 
     pub fn deposit(&self, user_id: i64, amount: i64, description: &str) -> Result<i64> {
-        let _lock = self.wallet_lock.lock().map_err(|_| anyhow::anyhow!("Wallet lock poisoned"))?;
+        let _lock = self
+            .wallet_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Wallet lock poisoned"))?;
         self.ensure_wallet(user_id)?;
-        let mut w = self.get_json::<Wallet>(T_WALLET, &user_id.to_string())?.unwrap();
+        let mut w = self
+            .get_json::<Wallet>(T_WALLET, &user_id.to_string())?
+            .unwrap();
         w.balance += amount;
         w.updated_at = now();
         self.put_json(T_WALLET, &user_id.to_string(), &w)?;
         let tx_id = self.next_seq("transactions");
-        let tx = Transaction { id: tx_id, user_id, tx_type: "deposit".into(), amount, description: description.into(), target_user_id: None, created_at: now() };
+        let tx = Transaction {
+            id: tx_id,
+            user_id,
+            tx_type: "deposit".into(),
+            amount,
+            description: description.into(),
+            target_user_id: None,
+            created_at: now(),
+        };
         self.mm_add(MM_TRANSACTION, &user_id.to_string(), &to_json(&tx))?;
         Ok(w.balance)
     }
 
     pub fn withdraw(&self, user_id: i64, amount: i64, description: &str) -> Result<i64> {
-        let _lock = self.wallet_lock.lock().map_err(|_| anyhow::anyhow!("Wallet lock poisoned"))?;
-        let mut w = self.get_json::<Wallet>(T_WALLET, &user_id.to_string())?.unwrap_or(Wallet { user_id, balance: 0, frozen: false, created_at: now(), updated_at: now() });
+        let _lock = self
+            .wallet_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Wallet lock poisoned"))?;
+        let mut w = self
+            .get_json::<Wallet>(T_WALLET, &user_id.to_string())?
+            .unwrap_or(Wallet {
+                user_id,
+                balance: 0,
+                frozen: false,
+                created_at: now(),
+                updated_at: now(),
+            });
         if w.balance < amount {
             anyhow::bail!("Insufficient funds: {} < {}", w.balance, amount);
         }
@@ -1124,14 +1352,39 @@ impl Database {
         w.updated_at = now();
         self.put_json(T_WALLET, &user_id.to_string(), &w)?;
         let tx_id = self.next_seq("transactions");
-        let tx = Transaction { id: tx_id, user_id, tx_type: "withdraw".into(), amount, description: description.into(), target_user_id: None, created_at: now() };
+        let tx = Transaction {
+            id: tx_id,
+            user_id,
+            tx_type: "withdraw".into(),
+            amount,
+            description: description.into(),
+            target_user_id: None,
+            created_at: now(),
+        };
         self.mm_add(MM_TRANSACTION, &user_id.to_string(), &to_json(&tx))?;
         Ok(w.balance)
     }
 
-    pub fn transfer(&self, from_user: i64, to_user: i64, amount: i64, description: &str) -> Result<()> {
-        let _lock = self.wallet_lock.lock().map_err(|_| anyhow::anyhow!("Wallet lock poisoned"))?;
-        let mut from_w = self.get_json::<Wallet>(T_WALLET, &from_user.to_string())?.unwrap_or(Wallet { user_id: from_user, balance: 0, frozen: false, created_at: now(), updated_at: now() });
+    pub fn transfer(
+        &self,
+        from_user: i64,
+        to_user: i64,
+        amount: i64,
+        description: &str,
+    ) -> Result<()> {
+        let _lock = self
+            .wallet_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Wallet lock poisoned"))?;
+        let mut from_w = self
+            .get_json::<Wallet>(T_WALLET, &from_user.to_string())?
+            .unwrap_or(Wallet {
+                user_id: from_user,
+                balance: 0,
+                frozen: false,
+                created_at: now(),
+                updated_at: now(),
+            });
         if from_w.balance < amount {
             anyhow::bail!("Insufficient funds: {} < {}", from_w.balance, amount);
         }
@@ -1140,25 +1393,46 @@ impl Database {
         self.put_json(T_WALLET, &from_user.to_string(), &from_w)?;
 
         self.ensure_wallet(to_user)?;
-        let mut to_w = self.get_json::<Wallet>(T_WALLET, &to_user.to_string())?.unwrap();
+        let mut to_w = self
+            .get_json::<Wallet>(T_WALLET, &to_user.to_string())?
+            .unwrap();
         to_w.balance += amount;
         to_w.updated_at = now();
         self.put_json(T_WALLET, &to_user.to_string(), &to_w)?;
 
         let ts = now();
         let tx_out_id = self.next_seq("transactions");
-        let tx_out = Transaction { id: tx_out_id, user_id: from_user, tx_type: "transfer_out".into(), amount, description: description.into(), target_user_id: Some(to_user), created_at: ts.clone() };
+        let tx_out = Transaction {
+            id: tx_out_id,
+            user_id: from_user,
+            tx_type: "transfer_out".into(),
+            amount,
+            description: description.into(),
+            target_user_id: Some(to_user),
+            created_at: ts.clone(),
+        };
         self.mm_add(MM_TRANSACTION, &from_user.to_string(), &to_json(&tx_out))?;
 
         let tx_in_id = self.next_seq("transactions");
-        let tx_in = Transaction { id: tx_in_id, user_id: to_user, tx_type: "transfer_in".into(), amount, description: description.into(), target_user_id: Some(from_user), created_at: ts };
+        let tx_in = Transaction {
+            id: tx_in_id,
+            user_id: to_user,
+            tx_type: "transfer_in".into(),
+            amount,
+            description: description.into(),
+            target_user_id: Some(from_user),
+            created_at: ts,
+        };
         self.mm_add(MM_TRANSACTION, &to_user.to_string(), &to_json(&tx_in))?;
         Ok(())
     }
 
     pub fn get_transactions(&self, user_id: i64, limit: i64) -> Result<Vec<serde_json::Value>> {
-        let mut txs: Vec<serde_json::Value> = self.mm_get_all(MM_TRANSACTION, &user_id.to_string())?.iter()
-            .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok()).collect();
+        let mut txs: Vec<serde_json::Value> = self
+            .mm_get_all(MM_TRANSACTION, &user_id.to_string())?
+            .iter()
+            .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+            .collect();
         txs.sort_by(|a, b| b["id"].as_i64().cmp(&a["id"].as_i64()));
         txs.truncate(limit as usize);
         Ok(txs)
@@ -1214,14 +1488,22 @@ impl Database {
             let t = txn.open_multimap_table(MM_GIFT_CATALOG)?;
             t.iter()?.next().is_some()
         };
-        if has_items { return Ok(()); }
+        if has_items {
+            return Ok(());
+        }
         let gifts = vec![
             (1, "Rose", "A single red rose", 10, "common"),
             (2, "Heart", "A golden heart", 50, "common"),
             (3, "Diamond Ring", "A sparkling diamond ring", 200, "rare"),
             (4, "Sports Car", "A virtual sports car", 500, "epic"),
             (5, "Yacht", "A luxury yacht", 1000, "legendary"),
-            (6, "Private Island", "Your own virtual island", 5000, "legendary"),
+            (
+                6,
+                "Private Island",
+                "Your own virtual island",
+                5000,
+                "legendary",
+            ),
         ];
         for (id, name, desc, price, rarity) in gifts {
             let item = serde_json::json!({"id": id, "name": name, "description": desc, "price": price, "rarity": rarity});
@@ -1232,36 +1514,69 @@ impl Database {
 
     pub fn send_gift(&self, from_user: i64, to_user: i64, gift_id: i64) -> Result<i64> {
         let catalog = self.get_gift_catalog()?;
-        let price = catalog.iter().find(|g| g["id"].as_i64() == Some(gift_id))
+        let price = catalog
+            .iter()
+            .find(|g| g["id"].as_i64() == Some(gift_id))
             .map(|g| g["price"].as_i64().unwrap_or(0))
             .ok_or_else(|| anyhow::anyhow!("Gift not found"))?;
 
-        let mut from_w = self.get_json::<Wallet>(T_WALLET, &from_user.to_string())?.unwrap();
+        let mut from_w = self
+            .get_json::<Wallet>(T_WALLET, &from_user.to_string())?
+            .unwrap();
         if from_w.balance < price {
-            anyhow::bail!("Insufficient funds for gift: {} < {}", from_w.balance, price);
+            anyhow::bail!(
+                "Insufficient funds for gift: {} < {}",
+                from_w.balance,
+                price
+            );
         }
         from_w.balance -= price;
         from_w.updated_at = now();
         self.put_json(T_WALLET, &from_user.to_string(), &from_w)?;
 
         self.ensure_wallet(to_user)?;
-        let mut to_w = self.get_json::<Wallet>(T_WALLET, &to_user.to_string())?.unwrap();
+        let mut to_w = self
+            .get_json::<Wallet>(T_WALLET, &to_user.to_string())?
+            .unwrap();
         to_w.balance += price;
         to_w.updated_at = now();
         self.put_json(T_WALLET, &to_user.to_string(), &to_w)?;
 
         let record_id = self.next_seq("gifts");
         let ts = now();
-        let gift = GiftRecord { id: record_id, from_user_id: from_user, to_user_id: to_user, gift_id, price, created_at: ts.clone() };
+        let gift = GiftRecord {
+            id: record_id,
+            from_user_id: from_user,
+            to_user_id: to_user,
+            gift_id,
+            price,
+            created_at: ts.clone(),
+        };
         self.mm_add(MM_GIFT, &to_user.to_string(), &to_json(&gift))?;
         self.mm_add(MM_GIFT, &format!("from_{}", from_user), &to_json(&gift))?;
 
         let tx_out_id = self.next_seq("transactions");
-        let tx_out = Transaction { id: tx_out_id, user_id: from_user, tx_type: "gift_out".into(), amount: price, description: format!("Gift #{}", gift_id), target_user_id: Some(to_user), created_at: ts.clone() };
+        let tx_out = Transaction {
+            id: tx_out_id,
+            user_id: from_user,
+            tx_type: "gift_out".into(),
+            amount: price,
+            description: format!("Gift #{}", gift_id),
+            target_user_id: Some(to_user),
+            created_at: ts.clone(),
+        };
         self.mm_add(MM_TRANSACTION, &from_user.to_string(), &to_json(&tx_out))?;
 
         let tx_in_id = self.next_seq("transactions");
-        let tx_in = Transaction { id: tx_in_id, user_id: to_user, tx_type: "gift_in".into(), amount: price, description: format!("Gift #{}", gift_id), target_user_id: Some(from_user), created_at: ts };
+        let tx_in = Transaction {
+            id: tx_in_id,
+            user_id: to_user,
+            tx_type: "gift_in".into(),
+            amount: price,
+            description: format!("Gift #{}", gift_id),
+            target_user_id: Some(from_user),
+            created_at: ts,
+        };
         self.mm_add(MM_TRANSACTION, &to_user.to_string(), &to_json(&tx_in))?;
         Ok(record_id)
     }
@@ -1272,18 +1587,27 @@ impl Database {
         let mut results = Vec::new();
         for entry in &entries {
             if let Ok(gift) = serde_json::from_str::<GiftRecord>(entry) {
-                let gname = catalog.iter().find(|g| g["id"].as_i64() == Some(gift.gift_id))
+                let gname = catalog
+                    .iter()
+                    .find(|g| g["id"].as_i64() == Some(gift.gift_id))
                     .and_then(|g| g["name"].as_str().map(String::from))
                     .unwrap_or_default();
-                let rarity = catalog.iter().find(|g| g["id"].as_i64() == Some(gift.gift_id))
+                let rarity = catalog
+                    .iter()
+                    .find(|g| g["id"].as_i64() == Some(gift.gift_id))
                     .and_then(|g| g["rarity"].as_str().map(String::from))
                     .unwrap_or_default();
                 let from_user = {
                     let txn = self.inner.begin_read()?;
                     let t = txn.open_table(T_USER)?;
                     if let Some(v) = t.get(gift.from_user_id.to_string().as_str())? {
-                        serde_json::from_str::<User>(v.value()).ok().map(|u| u.username).unwrap_or_default()
-                    } else { String::new() }
+                        serde_json::from_str::<User>(v.value())
+                            .ok()
+                            .map(|u| u.username)
+                            .unwrap_or_default()
+                    } else {
+                        String::new()
+                    }
                 };
                 results.push(serde_json::json!({
                     "id": gift.id, "price": gift.price, "name": gname,
@@ -1300,11 +1624,20 @@ impl Database {
         let mut results = Vec::new();
         for entry in &entries {
             if let Ok(gift) = serde_json::from_str::<GiftRecord>(entry) {
-                let gname = catalog.iter().find(|g| g["id"].as_i64() == Some(gift.gift_id))
-                    .and_then(|g| g["name"].as_str().map(String::from)).unwrap_or_default();
-                let rarity = catalog.iter().find(|g| g["id"].as_i64() == Some(gift.gift_id))
-                    .and_then(|g| g["rarity"].as_str().map(String::from)).unwrap_or_default();
-                let to_user = self.find_user_by_id(gift.to_user_id)?.map(|u| u.username).unwrap_or_default();
+                let gname = catalog
+                    .iter()
+                    .find(|g| g["id"].as_i64() == Some(gift.gift_id))
+                    .and_then(|g| g["name"].as_str().map(String::from))
+                    .unwrap_or_default();
+                let rarity = catalog
+                    .iter()
+                    .find(|g| g["id"].as_i64() == Some(gift.gift_id))
+                    .and_then(|g| g["rarity"].as_str().map(String::from))
+                    .unwrap_or_default();
+                let to_user = self
+                    .find_user_by_id(gift.to_user_id)?
+                    .map(|u| u.username)
+                    .unwrap_or_default();
                 results.push(serde_json::json!({
                     "id": gift.id, "price": gift.price, "name": gname,
                     "rarity": rarity, "to_user": to_user, "created_at": gift.created_at
@@ -1317,8 +1650,16 @@ impl Database {
     pub fn get_gift_stats(&self, user_id: i64) -> Result<serde_json::Value> {
         let sent_entries = self.mm_get_all(MM_GIFT, &format!("from_{}", user_id))?;
         let recv_entries = self.mm_get_all(MM_GIFT, &user_id.to_string())?;
-        let total_spent: i64 = sent_entries.iter().filter_map(|s| serde_json::from_str::<GiftRecord>(s).ok()).map(|g| g.price).sum();
-        let total_received: i64 = recv_entries.iter().filter_map(|s| serde_json::from_str::<GiftRecord>(s).ok()).map(|g| g.price).sum();
+        let total_spent: i64 = sent_entries
+            .iter()
+            .filter_map(|s| serde_json::from_str::<GiftRecord>(s).ok())
+            .map(|g| g.price)
+            .sum();
+        let total_received: i64 = recv_entries
+            .iter()
+            .filter_map(|s| serde_json::from_str::<GiftRecord>(s).ok())
+            .map(|g| g.price)
+            .sum();
         Ok(serde_json::json!({
             "sent_count": sent_entries.len() as i64,
             "received_count": recv_entries.len() as i64,
@@ -1330,30 +1671,65 @@ impl Database {
 
     pub fn mint_nft_gift(&self, user_id: i64, gift_id: i64, gift_record_id: i64) -> Result<i64> {
         let id = self.next_seq("nft_gifts");
-        let token_id = format!("YSH-NFT-{}-{}", gift_record_id, chrono::Utc::now().timestamp());
-        let nft = NftGift { id, user_id, gift_id, gift_record_id, token_id, unlocked: false, minted_at: now() };
+        let token_id = format!(
+            "YSH-NFT-{}-{}",
+            gift_record_id,
+            chrono::Utc::now().timestamp()
+        );
+        let nft = NftGift {
+            id,
+            user_id,
+            gift_id,
+            gift_record_id,
+            token_id,
+            unlocked: false,
+            minted_at: now(),
+        };
         self.mm_add(MM_NFT, &user_id.to_string(), &to_json(&nft))?;
         self.mm_add(IX_NFT_USER, &user_id.to_string(), &id.to_string())?;
         Ok(id)
     }
 
     pub fn get_nft_gifts(&self, user_id: i64) -> Result<Vec<serde_json::Value>> {
-        self.mm_get_all(MM_NFT, &user_id.to_string())?.iter()
-            .filter_map(|s| serde_json::from_str(s).ok()).collect::<Vec<_>>().pipe(Ok)
+        self.mm_get_all(MM_NFT, &user_id.to_string())?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect::<Vec<_>>()
+            .pipe(Ok)
     }
 
     // ═══════════════════════════════════════════
     // MOMENTS
     // ═══════════════════════════════════════════
 
-    pub fn create_moment(&self, user_id: i64, content: &str, media_url: &str, media_type: &str) -> Result<i64> {
+    pub fn create_moment(
+        &self,
+        user_id: i64,
+        content: &str,
+        media_url: &str,
+        media_type: &str,
+    ) -> Result<i64> {
         let id = self.next_seq("moments");
-        let m = Moment { id, user_id, content: content.into(), media_url: media_url.into(), media_type: media_type.into(), likes_count: 0, comments_count: 0, created_at: now() };
+        let m = Moment {
+            id,
+            user_id,
+            content: content.into(),
+            media_url: media_url.into(),
+            media_type: media_type.into(),
+            likes_count: 0,
+            comments_count: 0,
+            created_at: now(),
+        };
         self.mm_add(MM_MOMENT, &user_id.to_string(), &to_json(&m))?;
         Ok(id)
     }
 
-    pub fn get_moment_feed(&self, user_id: i64, offset: i64, limit: i64) -> Result<Vec<serde_json::Value>> {
+    pub fn get_moment_feed(
+        &self,
+        user_id: i64,
+        offset: i64,
+        limit: i64,
+    ) -> Result<Vec<serde_json::Value>> {
         let txn = self.inner.begin_read()?;
         let t = txn.open_multimap_table(MM_MOMENT)?;
         let mut all_moments: Vec<Moment> = Vec::new();
@@ -1365,20 +1741,25 @@ impl Database {
                 }
             }
         }
-        all_moments.sort_by(|a, b| b.id.cmp(&a.id));
+        all_moments.sort_by_key(|m| std::cmp::Reverse(m.id));
         drop(t);
         drop(txn);
 
-        let blocked_ids: std::collections::HashSet<i64> = self.get_blocked_users(user_id)?
-            .into_iter().map(|r| r.blocked_user_id).collect();
+        let blocked_ids: std::collections::HashSet<i64> = self
+            .get_blocked_users(user_id)?
+            .into_iter()
+            .map(|r| r.blocked_user_id)
+            .collect();
         let shadow_ids = self.active_shadow_ban_ids()?;
-        let blocked_content: std::collections::HashSet<i64> = self.get_content_flags(Some("actioned"))?
+        let blocked_content: std::collections::HashSet<i64> = self
+            .get_content_flags(Some("actioned"))?
             .into_iter()
             .filter(|f| f.target_type == "moment")
             .map(|f| f.target_id)
             .collect();
 
-        let visible: Vec<Moment> = all_moments.into_iter()
+        let visible: Vec<Moment> = all_moments
+            .into_iter()
             .filter(|m| !blocked_ids.contains(&m.user_id))
             .filter(|m| !shadow_ids.contains(&m.user_id))
             .filter(|m| !blocked_content.contains(&m.id))
@@ -1401,7 +1782,10 @@ impl Database {
     }
 
     pub fn like_moment(&self, _user_id: i64, moment_id: i64) -> Result<()> {
-        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+        let _lock = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let key = format!("{}_{}", _user_id, moment_id);
         let txn = self.inner.begin_write()?;
         {
@@ -1413,10 +1797,16 @@ impl Database {
     }
 
     pub fn unlike_moment(&self, _user_id: i64, moment_id: i64) -> Result<()> {
-        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+        let _lock = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let key = format!("{}_{}", _user_id, moment_id);
         let txn = self.inner.begin_write()?;
-        { let mut t = txn.open_multimap_table(MM_MOMENT_LIKE)?; t.remove(key.as_str(), "1")?; }
+        {
+            let mut t = txn.open_multimap_table(MM_MOMENT_LIKE)?;
+            t.remove(key.as_str(), "1")?;
+        }
         txn.commit()?;
         Ok(())
     }
@@ -1424,21 +1814,33 @@ impl Database {
     pub fn comment_on_moment(&self, user_id: i64, moment_id: i64, content: &str) -> Result<i64> {
         let id = self.next_seq("moment_comments");
         let comment = serde_json::json!({"id": id, "user_id": user_id, "content": content, "created_at": now()});
-        self.mm_add(MM_MOMENT_COMMENT, &moment_id.to_string(), &to_json(&comment))?;
+        self.mm_add(
+            MM_MOMENT_COMMENT,
+            &moment_id.to_string(),
+            &to_json(&comment),
+        )?;
         Ok(id)
     }
 
     pub fn get_moment_comments(&self, moment_id: i64) -> Result<Vec<serde_json::Value>> {
-        self.mm_get_all(MM_MOMENT_COMMENT, &moment_id.to_string())?.iter()
-            .filter_map(|s| serde_json::from_str(s).ok()).collect::<Vec<_>>().pipe(Ok)
+        self.mm_get_all(MM_MOMENT_COMMENT, &moment_id.to_string())?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect::<Vec<_>>()
+            .pipe(Ok)
     }
 
     pub fn delete_moment(&self, _user_id: i64, moment_id: i64) -> Result<bool> {
-        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+        let _lock = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         let removed = {
             let mut t = txn.open_multimap_table(MM_MOMENT)?;
-            t.remove_all(moment_id.to_string().as_str())?.next().is_some()
+            t.remove_all(moment_id.to_string().as_str())?
+                .next()
+                .is_some()
         };
         txn.commit()?;
         Ok(removed)
@@ -1452,7 +1854,9 @@ impl Database {
         let txn = self.inner.begin_read()?;
         let t = txn.open_table(table_def)?;
         let mut c: i64 = 0;
-        for _ in t.iter()? { c += 1; }
+        for _ in t.iter()? {
+            c += 1;
+        }
         Ok(c)
     }
 
@@ -1460,7 +1864,9 @@ impl Database {
         let txn = self.inner.begin_read()?;
         let t = txn.open_multimap_table(table_def)?;
         let mut c: i64 = 0;
-        for _ in t.iter()? { c += 1; }
+        for _ in t.iter()? {
+            c += 1;
+        }
         Ok(c)
     }
 
@@ -1489,7 +1895,10 @@ impl Database {
     /// Stores a translation override (admin panel) keyed as `"{locale}::{key}"`.
     pub fn set_i18n_override(&self, locale: &str, key: &str, value: &str) -> Result<()> {
         let fk = format!("{locale}::{key}");
-        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+        let _lock = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         {
             let mut t = txn.open_table(T_I18N)?;
@@ -1508,7 +1917,10 @@ impl Database {
 
     pub fn delete_i18n_override(&self, locale: &str, key: &str) -> Result<bool> {
         let fk = format!("{locale}::{key}");
-        let _lock = self.write_lock.lock().map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+        let _lock = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let txn = self.inner.begin_write()?;
         let removed = {
             let mut t = txn.open_table(T_I18N)?;
@@ -1535,36 +1947,68 @@ impl Database {
     // NOTIFICATIONS
     // ═══════════════════════════════════════════
 
-    pub fn create_notification(&self, user_id: i64, ntype: &str, title: &str, body: &str, data: &str, channel: &str) -> Result<i64> {
+    pub fn create_notification(
+        &self,
+        user_id: i64,
+        ntype: &str,
+        title: &str,
+        body: &str,
+        data: &str,
+        channel: &str,
+    ) -> Result<i64> {
         let id = self.next_seq("notifications");
-        let n = Notification { id, user_id, ntype: ntype.into(), title: title.into(), body: body.into(), data: data.into(), read: false, channel: channel.into(), status: "pending".into(), retries: 0, created_at: now(), sent_at: None };
+        let n = Notification {
+            id,
+            user_id,
+            ntype: ntype.into(),
+            title: title.into(),
+            body: body.into(),
+            data: data.into(),
+            read: false,
+            channel: channel.into(),
+            status: "pending".into(),
+            retries: 0,
+            created_at: now(),
+            sent_at: None,
+        };
         self.mm_add(MM_NOTIFICATION, &user_id.to_string(), &to_json(&n))?;
-        self.mm_add(IX_NOTIF_USER, &user_id.to_string(), &to_json(&serde_json::json!({"id": id, "read": false})))?;
+        self.mm_add(
+            IX_NOTIF_USER,
+            &user_id.to_string(),
+            &to_json(&serde_json::json!({"id": id, "read": false})),
+        )?;
         Ok(id)
     }
 
     pub fn get_notifications(&self, user_id: i64, limit: i64) -> Result<Vec<serde_json::Value>> {
-        self.mm_get_all(MM_NOTIFICATION, &user_id.to_string())?.iter()
+        self.mm_get_all(MM_NOTIFICATION, &user_id.to_string())?
+            .iter()
             .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok())
-            .take(limit as usize).collect::<Vec<_>>().pipe(Ok)
+            .take(limit as usize)
+            .collect::<Vec<_>>()
+            .pipe(Ok)
     }
 
     pub fn get_unread_count(&self, user_id: i64) -> Result<i64> {
         let entries = self.mm_get_all(MM_NOTIFICATION, &user_id.to_string())?;
-        let count = entries.iter().filter_map(|s| serde_json::from_str::<Notification>(s).ok()).filter(|n| !n.read).count();
+        let count = entries
+            .iter()
+            .filter_map(|s| serde_json::from_str::<Notification>(s).ok())
+            .filter(|n| !n.read)
+            .count();
         Ok(count as i64)
     }
 
     pub fn mark_notification_read(&self, _user_id: i64, notification_id: i64) -> Result<bool> {
         let entries = self.mm_get_all(MM_NOTIFICATION, &_user_id.to_string())?;
         for entry in &entries {
-            if let Ok(mut n) = serde_json::from_str::<Notification>(entry) {
-                if n.id == notification_id {
-                    n.read = true;
-                    self.mm_remove_one(MM_NOTIFICATION, &_user_id.to_string(), entry)?;
-                    self.mm_add(MM_NOTIFICATION, &_user_id.to_string(), &to_json(&n))?;
-                    return Ok(true);
-                }
+            if let Ok(mut n) = serde_json::from_str::<Notification>(entry)
+                && n.id == notification_id
+            {
+                n.read = true;
+                self.mm_remove_one(MM_NOTIFICATION, &_user_id.to_string(), entry)?;
+                self.mm_add(MM_NOTIFICATION, &_user_id.to_string(), &to_json(&n))?;
+                return Ok(true);
             }
         }
         Ok(false)
@@ -1574,8 +2018,11 @@ impl Database {
         let entries = self.mm_get_all(MM_NOTIFICATION, &user_id.to_string())?;
         let mut count = 0;
         for entry in &entries {
-            if let Ok(mut n) = serde_json::from_str::<Notification>(entry) {
-                if !n.read { n.read = true; count += 1; }
+            if let Ok(mut n) = serde_json::from_str::<Notification>(entry)
+                && !n.read
+            {
+                n.read = true;
+                count += 1;
             }
         }
         Ok(count)
@@ -1596,7 +2043,12 @@ impl Database {
         }
     }
 
-    pub fn update_notification_preference(&self, user_id: i64, field: &str, value: bool) -> Result<()> {
+    pub fn update_notification_preference(
+        &self,
+        user_id: i64,
+        field: &str,
+        value: bool,
+    ) -> Result<()> {
         let mut prefs = self.get_notification_preference(user_id)?;
         prefs[field] = serde_json::json!(value);
         self.put_json(T_NOTIF_PREF, &user_id.to_string(), &prefs)
@@ -1615,10 +2067,12 @@ impl Database {
     }
 
     pub fn get_push_tokens(&self, user_id: i64) -> Result<Vec<serde_json::Value>> {
-        self.mm_get_all(MM_PUSH_TOKEN, &user_id.to_string())?.iter()
+        self.mm_get_all(MM_PUSH_TOKEN, &user_id.to_string())?
+            .iter()
             .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok())
             .filter(|t| t["active"] == serde_json::json!(true))
-            .collect::<Vec<_>>().pipe(Ok)
+            .collect::<Vec<_>>()
+            .pipe(Ok)
     }
 
     pub fn deactivate_push_token(&self, user_id: i64, token: &str) -> Result<bool> {
@@ -1627,7 +2081,10 @@ impl Database {
         let mut found = false;
         for entry in &entries {
             if let Ok(mut t) = serde_json::from_str::<serde_json::Value>(entry) {
-                if t["token"].as_str() == Some(token) { t["active"] = serde_json::json!(false); found = true; }
+                if t["token"].as_str() == Some(token) {
+                    t["active"] = serde_json::json!(false);
+                    found = true;
+                }
                 self.mm_add(MM_PUSH_TOKEN, &user_id.to_string(), &to_json(&t))?;
             }
         }
@@ -1640,7 +2097,12 @@ impl Database {
 
     pub fn create_chat_session(&self, session_type: &str, user_ids: &[i64]) -> Result<i64> {
         let id = self.next_seq("chat_sessions");
-        let s = ChatSession { id, session_type: session_type.into(), created_at: now(), updated_at: now() };
+        let s = ChatSession {
+            id,
+            session_type: session_type.into(),
+            created_at: now(),
+            updated_at: now(),
+        };
         self.put_json(T_CHAT_SESSION, &id.to_string(), &s)?;
         for uid in user_ids {
             self.mm_add(MM_CHAT_PARTICIPANT, &id.to_string(), &uid.to_string())?;
@@ -1656,8 +2118,11 @@ impl Database {
             for sb in &sessions_b {
                 if sa == sb {
                     let sid: i64 = sa.parse().unwrap_or(0);
-                    if let Some(session) = self.get_json::<ChatSession>(T_CHAT_SESSION, &sid.to_string())? {
-                        if session.session_type == "direct" { return Ok(Some(sid)); }
+                    if let Some(session) =
+                        self.get_json::<ChatSession>(T_CHAT_SESSION, &sid.to_string())?
+                        && session.session_type == "direct"
+                    {
+                        return Ok(Some(sid));
                     }
                 }
             }
@@ -1687,24 +2152,51 @@ impl Database {
         let mut results = Vec::new();
         for uid_str in user_ids {
             let uid: i64 = uid_str.parse().unwrap_or(0);
-            let username = self.find_user_by_id(uid)?.map(|u| u.username).unwrap_or_default();
+            let username = self
+                .find_user_by_id(uid)?
+                .map(|u| u.username)
+                .unwrap_or_default();
             results.push(serde_json::json!({"user_id": uid, "username": username}));
         }
         Ok(results)
     }
 
-    pub fn send_message(&self, session_id: i64, sender_id: i64, content: &str, msg_type: &str, encrypted: bool) -> Result<i64> {
+    pub fn send_message(
+        &self,
+        session_id: i64,
+        sender_id: i64,
+        content: &str,
+        msg_type: &str,
+        encrypted: bool,
+    ) -> Result<i64> {
         let id = self.next_seq("messages");
-        let m = Message { id, session_id, sender_id, content: content.into(), msg_type: msg_type.into(), encrypted, read: false, created_at: now() };
+        let m = Message {
+            id,
+            session_id,
+            sender_id,
+            content: content.into(),
+            msg_type: msg_type.into(),
+            encrypted,
+            read: false,
+            created_at: now(),
+        };
         self.mm_add(MM_MSG, &session_id.to_string(), &to_json(&m))?;
         self.mm_add(IX_MSG_SESSION, &session_id.to_string(), &id.to_string())?;
         Ok(id)
     }
 
-    pub fn get_messages(&self, session_id: i64, limit: i64, before_id: Option<i64>) -> Result<Vec<serde_json::Value>> {
+    pub fn get_messages(
+        &self,
+        session_id: i64,
+        limit: i64,
+        before_id: Option<i64>,
+    ) -> Result<Vec<serde_json::Value>> {
         let entries = self.mm_get_all(MM_MSG, &session_id.to_string())?;
-        let mut messages: Vec<Message> = entries.iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
-        messages.sort_by(|a, b| b.id.cmp(&a.id));
+        let mut messages: Vec<Message> = entries
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect();
+        messages.sort_by_key(|m| std::cmp::Reverse(m.id));
         if let Some(before) = before_id {
             messages.retain(|m| m.id < before);
         }
@@ -1721,7 +2213,10 @@ impl Database {
         self.mm_remove_all(MM_MSG, &session_id.to_string())?;
         for entry in &entries {
             if let Ok(mut m) = serde_json::from_str::<Message>(entry) {
-                if m.sender_id != user_id && !m.read { m.read = true; count += 1; }
+                if m.sender_id != user_id && !m.read {
+                    m.read = true;
+                    count += 1;
+                }
                 self.mm_add(MM_MSG, &session_id.to_string(), &to_json(&m))?;
             }
         }
@@ -1735,8 +2230,11 @@ impl Database {
             let sid: i64 = sid_str.parse().unwrap_or(0);
             let entries = self.mm_get_all(MM_MSG, &sid.to_string())?;
             for entry in &entries {
-                if let Ok(m) = serde_json::from_str::<Message>(entry) {
-                    if m.sender_id != user_id && !m.read { total += 1; }
+                if let Ok(m) = serde_json::from_str::<Message>(entry)
+                    && m.sender_id != user_id
+                    && !m.read
+                {
+                    total += 1;
                 }
             }
         }
@@ -1762,11 +2260,14 @@ impl Database {
     pub fn find_match(&self, exclude_user_id: i64, mode: &str) -> Result<Option<i64>> {
         let entries = self.mm_get_all_entries(MM_MATCH_QUEUE)?;
         for (uid_str, val) in &entries {
-            if uid_str == &exclude_user_id.to_string() { continue; }
-            if let Ok(entry) = serde_json::from_str::<serde_json::Value>(val) {
-                if entry["mode"].as_str() == Some(mode) && entry["status"].as_str() == Some("waiting") {
-                    return Ok(Some(uid_str.parse().unwrap_or(0)));
-                }
+            if uid_str == &exclude_user_id.to_string() {
+                continue;
+            }
+            if let Ok(entry) = serde_json::from_str::<serde_json::Value>(val)
+                && entry["mode"].as_str() == Some(mode)
+                && entry["status"].as_str() == Some("waiting")
+            {
+                return Ok(Some(uid_str.parse().unwrap_or(0)));
             }
         }
         Ok(None)
@@ -1774,12 +2275,23 @@ impl Database {
 
     pub fn find_random_match(&self, exclude_user_id: i64) -> Result<Option<i64>> {
         let entries = self.mm_get_all_entries(MM_MATCH_QUEUE)?;
-        let candidates: Vec<i64> = entries.iter().filter_map(|(k, v)| {
-            if k == &exclude_user_id.to_string() { return None; }
-            let entry: serde_json::Value = serde_json::from_str(v).ok()?;
-            if entry["status"].as_str() == Some("waiting") { k.parse().ok() } else { None }
-        }).collect();
-        if candidates.is_empty() { return Ok(None); }
+        let candidates: Vec<i64> = entries
+            .iter()
+            .filter_map(|(k, v)| {
+                if k == &exclude_user_id.to_string() {
+                    return None;
+                }
+                let entry: serde_json::Value = serde_json::from_str(v).ok()?;
+                if entry["status"].as_str() == Some("waiting") {
+                    k.parse().ok()
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if candidates.is_empty() {
+            return Ok(None);
+        }
         let idx = rand::rng().random_range(0usize..candidates.len());
         Ok(Some(candidates[idx]))
     }
@@ -1790,11 +2302,15 @@ impl Database {
 
     pub fn get_queue_size(&self) -> Result<i64> {
         let entries = self.mm_get_all_entries(MM_MATCH_QUEUE)?;
-        let count = entries.iter().filter(|(_, v)| {
-            serde_json::from_str::<serde_json::Value>(v).ok()
-                .and_then(|e| e["status"].as_str().map(|s| s == "waiting"))
-                .unwrap_or(false)
-        }).count();
+        let count = entries
+            .iter()
+            .filter(|(_, v)| {
+                serde_json::from_str::<serde_json::Value>(v)
+                    .ok()
+                    .and_then(|e| e["status"].as_str().map(|s| s == "waiting"))
+                    .unwrap_or(false)
+            })
+            .count();
         Ok(count as i64)
     }
 
@@ -1807,7 +2323,9 @@ impl Database {
     // ═══════════════════════════════════════════
 
     pub fn stake(&self, user_id: i64, amount: i64, apy_rate: f64, unlock_days: i64) -> Result<i64> {
-        let mut w = self.get_json::<Wallet>(T_WALLET, &user_id.to_string())?.unwrap();
+        let mut w = self
+            .get_json::<Wallet>(T_WALLET, &user_id.to_string())?
+            .unwrap();
         if w.balance < amount {
             anyhow::bail!("Insufficient funds for staking: {} < {}", w.balance, amount);
         }
@@ -1818,11 +2336,29 @@ impl Database {
         let id = self.next_seq("staking");
         let ts = now();
         let unlocks = chrono::Utc::now() + chrono::Duration::days(unlock_days);
-        let stake = Staking { id, user_id, amount, apy_rate, status: "active".into(), staked_at: ts.clone(), unlocks_at: unlocks.format("%Y-%m-%dT%H:%M:%SZ").to_string(), rewards_earned: 0, last_reward_calc: ts.clone() };
+        let stake = Staking {
+            id,
+            user_id,
+            amount,
+            apy_rate,
+            status: "active".into(),
+            staked_at: ts.clone(),
+            unlocks_at: unlocks.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            rewards_earned: 0,
+            last_reward_calc: ts.clone(),
+        };
         self.mm_add(MM_STAKING, &user_id.to_string(), &to_json(&stake))?;
 
         let tx_id = self.next_seq("transactions");
-        let tx = Transaction { id: tx_id, user_id, tx_type: "stake".into(), amount, description: format!("Staked {} YSH for {} days", amount, unlock_days), target_user_id: None, created_at: ts };
+        let tx = Transaction {
+            id: tx_id,
+            user_id,
+            tx_type: "stake".into(),
+            amount,
+            description: format!("Staked {} YSH for {} days", amount, unlock_days),
+            target_user_id: None,
+            created_at: ts,
+        };
         self.mm_add(MM_TRANSACTION, &user_id.to_string(), &to_json(&tx))?;
         Ok(id)
     }
@@ -1831,35 +2367,53 @@ impl Database {
         let entries = self.mm_get_all(MM_STAKING, &user_id.to_string())?;
         let mut found: Option<Staking> = None;
         for entry in &entries {
-            if let Ok(s) = serde_json::from_str::<Staking>(entry) {
-                if s.id == stake_id && s.status == "active" {
-                    found = Some(s);
-                    break;
-                }
+            if let Ok(s) = serde_json::from_str::<Staking>(entry)
+                && s.id == stake_id
+                && s.status == "active"
+            {
+                found = Some(s);
+                break;
             }
         }
         let stake = found.ok_or_else(|| anyhow::anyhow!("Stake not found"))?;
         let now_str = now();
         if stake.unlocks_at > now_str {
-            anyhow::bail!("Staking lock not yet expired, unlocks at: {}", stake.unlocks_at);
+            anyhow::bail!(
+                "Staking lock not yet expired, unlocks at: {}",
+                stake.unlocks_at
+            );
         }
         let total = stake.amount + stake.rewards_earned;
 
         self.mm_remove_all(MM_STAKING, &user_id.to_string())?;
         for entry in &entries {
             if let Ok(mut s) = serde_json::from_str::<Staking>(entry) {
-                if s.id == stake_id { s.status = "withdrawn".into(); s.amount = 0; s.rewards_earned = 0; }
+                if s.id == stake_id {
+                    s.status = "withdrawn".into();
+                    s.amount = 0;
+                    s.rewards_earned = 0;
+                }
                 self.mm_add(MM_STAKING, &user_id.to_string(), &to_json(&s))?;
             }
         }
 
-        let mut w = self.get_json::<Wallet>(T_WALLET, &user_id.to_string())?.unwrap();
+        let mut w = self
+            .get_json::<Wallet>(T_WALLET, &user_id.to_string())?
+            .unwrap();
         w.balance += total;
         w.updated_at = now();
         self.put_json(T_WALLET, &user_id.to_string(), &w)?;
 
         let tx_id = self.next_seq("transactions");
-        let tx = Transaction { id: tx_id, user_id, tx_type: "unstake".into(), amount: total, description: format!("Unstaked + rewards from #{}", stake_id), target_user_id: None, created_at: now() };
+        let tx = Transaction {
+            id: tx_id,
+            user_id,
+            tx_type: "unstake".into(),
+            amount: total,
+            description: format!("Unstaked + rewards from #{}", stake_id),
+            target_user_id: None,
+            created_at: now(),
+        };
         self.mm_add(MM_TRANSACTION, &user_id.to_string(), &to_json(&tx))?;
         Ok(total)
     }
@@ -1878,38 +2432,53 @@ impl Database {
                 self.mm_add(MM_STAKING, &user_id.to_string(), &to_json(&s))?;
             }
         }
-        if rewards <= 0 { anyhow::bail!("No rewards to claim"); }
+        if rewards <= 0 {
+            anyhow::bail!("No rewards to claim");
+        }
 
-        let mut w = self.get_json::<Wallet>(T_WALLET, &user_id.to_string())?.unwrap();
+        let mut w = self
+            .get_json::<Wallet>(T_WALLET, &user_id.to_string())?
+            .unwrap();
         w.balance += rewards;
         w.updated_at = now();
         self.put_json(T_WALLET, &user_id.to_string(), &w)?;
 
         let tx_id = self.next_seq("transactions");
-        let tx = Transaction { id: tx_id, user_id, tx_type: "staking_reward".into(), amount: rewards, description: format!("Staking reward from #{}", stake_id), target_user_id: None, created_at: now() };
+        let tx = Transaction {
+            id: tx_id,
+            user_id,
+            tx_type: "staking_reward".into(),
+            amount: rewards,
+            description: format!("Staking reward from #{}", stake_id),
+            target_user_id: None,
+            created_at: now(),
+        };
         self.mm_add(MM_TRANSACTION, &user_id.to_string(), &to_json(&tx))?;
         Ok(rewards)
     }
 
     pub fn get_staking_positions(&self, user_id: i64) -> Result<Vec<serde_json::Value>> {
-        self.mm_get_all(MM_STAKING, &user_id.to_string())?.iter()
-            .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok()).collect::<Vec<_>>().pipe(Ok)
+        self.mm_get_all(MM_STAKING, &user_id.to_string())?
+            .iter()
+            .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+            .collect::<Vec<_>>()
+            .pipe(Ok)
     }
 
     pub fn calculate_staking_rewards(&self) -> Result<usize> {
         let entries = self.mm_get_all_entries(MM_STAKING)?;
         let mut updated = 0;
         for (uid, val) in &entries {
-            if let Ok(mut s) = serde_json::from_str::<Staking>(val) {
-                if s.status == "active" {
-                    let daily_reward = ((s.amount as f64 * s.apy_rate) / 365.0) as i64;
-                    if daily_reward > 0 {
-                        s.rewards_earned += daily_reward;
-                        s.last_reward_calc = now();
-                        self.mm_remove_all(MM_STAKING, uid)?;
-                        self.mm_add(MM_STAKING, uid, &to_json(&s))?;
-                        updated += 1;
-                    }
+            if let Ok(mut s) = serde_json::from_str::<Staking>(val)
+                && s.status == "active"
+            {
+                let daily_reward = ((s.amount as f64 * s.apy_rate) / 365.0) as i64;
+                if daily_reward > 0 {
+                    s.rewards_earned += daily_reward;
+                    s.last_reward_calc = now();
+                    self.mm_remove_all(MM_STAKING, uid)?;
+                    self.mm_add(MM_STAKING, uid, &to_json(&s))?;
+                    updated += 1;
                 }
             }
         }
@@ -1922,15 +2491,17 @@ impl Database {
         let mut total_rewards = 0i64;
         let mut active = 0i64;
         for (_, val) in &entries {
-            if let Ok(s) = serde_json::from_str::<Staking>(val) {
-                if s.status == "active" {
-                    total_staked += s.amount;
-                    total_rewards += s.rewards_earned;
-                    active += 1;
-                }
+            if let Ok(s) = serde_json::from_str::<Staking>(val)
+                && s.status == "active"
+            {
+                total_staked += s.amount;
+                total_rewards += s.rewards_earned;
+                active += 1;
             }
         }
-        Ok(serde_json::json!({"total_staked": total_staked, "total_rewards_pending": total_rewards, "active_positions": active}))
+        Ok(
+            serde_json::json!({"total_staked": total_staked, "total_rewards_pending": total_rewards, "active_positions": active}),
+        )
     }
 
     // ═══════════════════════════════════════════
@@ -1939,7 +2510,16 @@ impl Database {
 
     pub fn create_referral(&self, referrer_id: i64, referred_id: i64, code: &str) -> Result<i64> {
         let id = self.next_seq("referrals");
-        let r = Referral { id, referrer_id, referred_id, code: code.into(), status: "pending".into(), referred_at: now(), first_purchase_at: None, total_earned: 0 };
+        let r = Referral {
+            id,
+            referrer_id,
+            referred_id,
+            code: code.into(),
+            status: "pending".into(),
+            referred_at: now(),
+            first_purchase_at: None,
+            total_earned: 0,
+        };
         self.mm_add(MM_REFERRAL, &referrer_id.to_string(), &to_json(&r))?;
         self.put_json(IX_REFERRAL_CODE, code, &referrer_id.to_string())?;
         Ok(id)
@@ -1951,8 +2531,10 @@ impl Database {
                 let referrer_id: i64 = referrer_id_str.parse()?;
                 let entries = self.mm_get_all(MM_REFERRAL, &referrer_id.to_string())?;
                 for entry in &entries {
-                    if let Ok(r) = serde_json::from_str::<Referral>(entry) {
-                        if r.code == code { return Ok(Some((referrer_id, r.referred_id))); }
+                    if let Ok(r) = serde_json::from_str::<Referral>(entry)
+                        && r.code == code
+                    {
+                        return Ok(Some((referrer_id, r.referred_id)));
                     }
                 }
                 Ok(None)
@@ -1964,13 +2546,14 @@ impl Database {
     pub fn complete_referral(&self, referred_id: i64) -> Result<()> {
         let all_entries = self.mm_get_all_entries(MM_REFERRAL)?;
         for (referrer_key, val) in &all_entries {
-            if let Ok(mut r) = serde_json::from_str::<Referral>(val) {
-                if r.referred_id == referred_id && r.status == "pending" {
-                    r.status = "completed".into();
-                    r.first_purchase_at = Some(now());
-                    self.mm_remove_one(MM_REFERRAL, referrer_key, val)?;
-                    self.mm_add(MM_REFERRAL, referrer_key, &to_json(&r))?;
-                }
+            if let Ok(mut r) = serde_json::from_str::<Referral>(val)
+                && r.referred_id == referred_id
+                && r.status == "pending"
+            {
+                r.status = "completed".into();
+                r.first_purchase_at = Some(now());
+                self.mm_remove_one(MM_REFERRAL, referrer_key, val)?;
+                self.mm_add(MM_REFERRAL, referrer_key, &to_json(&r))?;
             }
         }
         Ok(())
@@ -1990,21 +2573,46 @@ impl Database {
 
     pub fn get_referral_stats(&self, user_id: i64) -> Result<serde_json::Value> {
         let entries = self.mm_get_all(MM_REFERRAL, &user_id.to_string())?;
-        let referrals: Vec<Referral> = entries.iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        let referrals: Vec<Referral> = entries
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect();
         let total_referred = referrals.len() as i64;
         let completed = referrals.iter().filter(|r| r.status == "completed").count() as i64;
         let total_earned = referrals.iter().map(|r| r.total_earned).sum::<i64>();
         let code = referrals.first().map(|r| r.code.clone());
-        Ok(serde_json::json!({"referral_code": code, "total_referred": total_referred, "completed": completed, "total_earned": total_earned}))
+        Ok(
+            serde_json::json!({"referral_code": code, "total_referred": total_referred, "completed": completed, "total_earned": total_earned}),
+        )
     }
 
     // ═══════════════════════════════════════════
     // PHASE 9: CALL BILLING
     // ═══════════════════════════════════════════
 
-    pub fn start_call_billing(&self, caller_id: i64, host_id: i64, call_type: &str, cost_per_min: i64) -> Result<i64> {
+    pub fn start_call_billing(
+        &self,
+        caller_id: i64,
+        host_id: i64,
+        call_type: &str,
+        cost_per_min: i64,
+    ) -> Result<i64> {
         let id = self.next_seq("call_billing");
-        let cb = CallBilling { id, caller_id, host_id, call_type: call_type.into(), started_at: now(), ended_at: None, duration_secs: 0, cost_per_min, total_cost: 0, host_earnings: 0, platform_fee: 0, status: "active".into(), paid: false };
+        let cb = CallBilling {
+            id,
+            caller_id,
+            host_id,
+            call_type: call_type.into(),
+            started_at: now(),
+            ended_at: None,
+            duration_secs: 0,
+            cost_per_min,
+            total_cost: 0,
+            host_earnings: 0,
+            platform_fee: 0,
+            status: "active".into(),
+            paid: false,
+        };
         self.mm_add(MM_CALL_BILLING, &host_id.to_string(), &to_json(&cb))?;
         Ok(id)
     }
@@ -2012,28 +2620,32 @@ impl Database {
     pub fn end_call_billing(&self, call_id: i64) -> Result<(i64, i64, i64)> {
         let entries = self.mm_get_all_entries(MM_CALL_BILLING)?;
         for (host_key, val) in &entries {
-            if let Ok(mut cb) = serde_json::from_str::<CallBilling>(val) {
-                if cb.id == call_id && cb.status == "active" {
-                    let now_str = now();
-                    let start = chrono::NaiveDateTime::parse_from_str(&cb.started_at, "%Y-%m-%dT%H:%M:%SZ").unwrap_or_default();
-                    let end = chrono::NaiveDateTime::parse_from_str(&now_str, "%Y-%m-%dT%H:%M:%SZ").unwrap_or_default();
-                    let duration_secs = (end - start).num_seconds().max(0) as i64;
-                    let duration_mins = ((duration_secs + 59) / 60).max(1);
-                    let total_cost = duration_mins * cb.cost_per_min;
-                    let host_earnings = (total_cost as f64 * 0.70) as i64;
-                    let platform_fee = total_cost - host_earnings;
+            if let Ok(mut cb) = serde_json::from_str::<CallBilling>(val)
+                && cb.id == call_id
+                && cb.status == "active"
+            {
+                let now_str = now();
+                let start =
+                    chrono::NaiveDateTime::parse_from_str(&cb.started_at, "%Y-%m-%dT%H:%M:%SZ")
+                        .unwrap_or_default();
+                let end = chrono::NaiveDateTime::parse_from_str(&now_str, "%Y-%m-%dT%H:%M:%SZ")
+                    .unwrap_or_default();
+                let duration_secs = (end - start).num_seconds().max(0);
+                let duration_mins = ((duration_secs + 59) / 60).max(1);
+                let total_cost = duration_mins * cb.cost_per_min;
+                let host_earnings = (total_cost as f64 * 0.70) as i64;
+                let platform_fee = total_cost - host_earnings;
 
-                    cb.ended_at = Some(now_str);
-                    cb.duration_secs = duration_secs;
-                    cb.total_cost = total_cost;
-                    cb.host_earnings = host_earnings;
-                    cb.platform_fee = platform_fee;
-                    cb.status = "completed".into();
+                cb.ended_at = Some(now_str);
+                cb.duration_secs = duration_secs;
+                cb.total_cost = total_cost;
+                cb.host_earnings = host_earnings;
+                cb.platform_fee = platform_fee;
+                cb.status = "completed".into();
 
-                    self.mm_remove_one(MM_CALL_BILLING, host_key, val)?;
-                    self.mm_add(MM_CALL_BILLING, host_key, &to_json(&cb))?;
-                    return Ok((total_cost, host_earnings, platform_fee));
-                }
+                self.mm_remove_one(MM_CALL_BILLING, host_key, val)?;
+                self.mm_add(MM_CALL_BILLING, host_key, &to_json(&cb))?;
+                return Ok((total_cost, host_earnings, platform_fee));
             }
         }
         anyhow::bail!("Call not found")
@@ -2041,31 +2653,51 @@ impl Database {
 
     pub fn get_host_call_stats(&self, host_id: i64) -> Result<serde_json::Value> {
         let entries = self.mm_get_all(MM_CALL_BILLING, &host_id.to_string())?;
-        let calls: Vec<CallBilling> = entries.iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        let calls: Vec<CallBilling> = entries
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect();
         let total_calls = calls.iter().filter(|c| c.status == "completed").count() as i64;
-        let total_earnings = calls.iter().filter(|c| c.status == "completed").map(|c| c.host_earnings).sum::<i64>();
-        let total_duration = calls.iter().filter(|c| c.status == "completed").map(|c| c.duration_secs).sum::<i64>();
-        Ok(serde_json::json!({"total_calls": total_calls, "total_earnings": total_earnings, "total_duration_secs": total_duration}))
+        let total_earnings = calls
+            .iter()
+            .filter(|c| c.status == "completed")
+            .map(|c| c.host_earnings)
+            .sum::<i64>();
+        let total_duration = calls
+            .iter()
+            .filter(|c| c.status == "completed")
+            .map(|c| c.duration_secs)
+            .sum::<i64>();
+        Ok(
+            serde_json::json!({"total_calls": total_calls, "total_earnings": total_earnings, "total_duration_secs": total_duration}),
+        )
     }
 
     pub fn finalize_call_payment(&self, call_id: i64) -> Result<serde_json::Value> {
         let entries = self.mm_get_all_entries(MM_CALL_BILLING)?;
         for (host_key, val) in &entries {
-            if let Ok(mut cb) = serde_json::from_str::<CallBilling>(val) {
-                if cb.id == call_id && cb.status == "completed" && !cb.paid {
-                    let balance = self.withdraw(cb.caller_id, cb.total_cost, &format!("Call #{}", call_id))?;
-                    self.deposit(cb.host_id, cb.host_earnings, &format!("Call #{} earnings", call_id))?;
-                    cb.paid = true;
-                    self.mm_remove_one(MM_CALL_BILLING, host_key, val)?;
-                    self.mm_add(MM_CALL_BILLING, host_key, &to_json(&cb))?;
-                    return Ok(serde_json::json!({
-                        "call_id": call_id,
-                        "caller_balance": balance,
-                        "total_cost": cb.total_cost,
-                        "host_earnings": cb.host_earnings,
-                        "platform_fee": cb.platform_fee,
-                    }));
-                }
+            if let Ok(mut cb) = serde_json::from_str::<CallBilling>(val)
+                && cb.id == call_id
+                && cb.status == "completed"
+                && !cb.paid
+            {
+                let balance =
+                    self.withdraw(cb.caller_id, cb.total_cost, &format!("Call #{}", call_id))?;
+                self.deposit(
+                    cb.host_id,
+                    cb.host_earnings,
+                    &format!("Call #{} earnings", call_id),
+                )?;
+                cb.paid = true;
+                self.mm_remove_one(MM_CALL_BILLING, host_key, val)?;
+                self.mm_add(MM_CALL_BILLING, host_key, &to_json(&cb))?;
+                return Ok(serde_json::json!({
+                    "call_id": call_id,
+                    "caller_balance": balance,
+                    "total_cost": cb.total_cost,
+                    "host_earnings": cb.host_earnings,
+                    "platform_fee": cb.platform_fee,
+                }));
             }
         }
         anyhow::bail!("No completed unpaid billing found for call {}", call_id)
@@ -2074,10 +2706,11 @@ impl Database {
     pub fn find_active_call_billing(&self, caller_id: i64) -> Result<Option<CallBilling>> {
         let entries = self.mm_get_all_entries(MM_CALL_BILLING)?;
         for (_host_key, val) in &entries {
-            if let Ok(cb) = serde_json::from_str::<CallBilling>(val) {
-                if cb.caller_id == caller_id && cb.status == "in_progress" {
-                    return Ok(Some(cb));
-                }
+            if let Ok(cb) = serde_json::from_str::<CallBilling>(val)
+                && cb.caller_id == caller_id
+                && cb.status == "in_progress"
+            {
+                return Ok(Some(cb));
             }
         }
         Ok(None)
@@ -2087,7 +2720,14 @@ impl Database {
     // PHASE 8: WEBRTC CALL RECORDS
     // ═══════════════════════════════════════════
 
-    pub fn create_call_record(&self, call_id: &str, room_id: &str, host_id: i64, call_type: &str, participants: &[i64]) -> Result<()> {
+    pub fn create_call_record(
+        &self,
+        call_id: &str,
+        room_id: &str,
+        host_id: i64,
+        call_type: &str,
+        participants: &[i64],
+    ) -> Result<()> {
         let rec = CallRecord {
             call_id: call_id.into(),
             room_id: room_id.into(),
@@ -2112,7 +2752,11 @@ impl Database {
         Ok(())
     }
 
-    pub fn update_call_record(&self, call_id: &str, f: impl FnOnce(&mut CallRecord)) -> Result<bool> {
+    pub fn update_call_record(
+        &self,
+        call_id: &str,
+        f: impl FnOnce(&mut CallRecord),
+    ) -> Result<bool> {
         let mut rec = match self.get_json::<CallRecord>(T_CALL, call_id)? {
             Some(r) => r,
             None => return Ok(false),
@@ -2163,8 +2807,10 @@ impl Database {
             return Ok(rec.duration_secs);
         }
         let now_str = now();
-        let start = chrono::NaiveDateTime::parse_from_str(&rec.started_at, "%Y-%m-%dT%H:%M:%SZ").unwrap_or_default();
-        let end = chrono::NaiveDateTime::parse_from_str(&now_str, "%Y-%m-%dT%H:%M:%SZ").unwrap_or_default();
+        let start = chrono::NaiveDateTime::parse_from_str(&rec.started_at, "%Y-%m-%dT%H:%M:%SZ")
+            .unwrap_or_default();
+        let end = chrono::NaiveDateTime::parse_from_str(&now_str, "%Y-%m-%dT%H:%M:%SZ")
+            .unwrap_or_default();
         rec.duration_secs = (end - start).num_seconds().max(0) as i64;
         rec.ended_at = Some(now_str);
         rec.status = "ended".into();
@@ -2185,8 +2831,16 @@ impl Database {
                 recs.push(rec);
             }
         }
-        recs.sort_by(|a, b| b.started_at.cmp(&a.started_at).then_with(|| b.call_id.cmp(&a.call_id)));
-        let out: Vec<serde_json::Value> = recs.into_iter().take(limit as usize).map(|r| serde_json::to_value(r).unwrap_or_default()).collect();
+        recs.sort_by(|a, b| {
+            b.started_at
+                .cmp(&a.started_at)
+                .then_with(|| b.call_id.cmp(&a.call_id))
+        });
+        let out: Vec<serde_json::Value> = recs
+            .into_iter()
+            .take(limit as usize)
+            .map(|r| serde_json::to_value(r).unwrap_or_default())
+            .collect();
         Ok(out)
     }
 
@@ -2218,7 +2872,16 @@ impl Database {
     // ═══════════════════════════════════════════
 
     #[allow(clippy::too_many_arguments)]
-    pub fn add_quality_sample(&self, call_id: &str, user_id: i64, bitrate_kbps: f64, packet_loss_pct: f64, rtt_ms: f64, resolution: &str, simulcast_tier: &str) -> Result<()> {
+    pub fn add_quality_sample(
+        &self,
+        call_id: &str,
+        user_id: i64,
+        bitrate_kbps: f64,
+        packet_loss_pct: f64,
+        rtt_ms: f64,
+        resolution: &str,
+        simulcast_tier: &str,
+    ) -> Result<()> {
         let sample = QualitySample {
             call_id: call_id.into(),
             user_id,
@@ -2234,7 +2897,10 @@ impl Database {
 
     pub fn get_quality_metrics(&self, call_id: &str) -> Result<Vec<QualitySample>> {
         let entries = self.mm_get_all(MM_CALL_QUALITY, call_id)?;
-        Ok(entries.iter().filter_map(|s| serde_json::from_str(s).ok()).collect())
+        Ok(entries
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect())
     }
 
     pub fn aggregate_quality(&self, call_id: &str) -> Result<serde_json::Value> {
@@ -2261,7 +2927,13 @@ impl Database {
     // PHASE 8: CALL RECORDINGS (opt-in, encrypted)
     // ═══════════════════════════════════════════
 
-    pub fn start_call_recording(&self, call_id: &str, storage_key: &str, encrypted: bool, size_bytes: i64) -> Result<i64> {
+    pub fn start_call_recording(
+        &self,
+        call_id: &str,
+        storage_key: &str,
+        encrypted: bool,
+        size_bytes: i64,
+    ) -> Result<i64> {
         let segment_id = self.next_seq("call_recordings");
         let rec = CallRecording {
             call_id: call_id.into(),
@@ -2284,7 +2956,9 @@ impl Database {
             .iter()
             .filter_map(|s| serde_json::from_str::<CallRecording>(s).ok())
             .collect();
-        let matched = recs.iter_mut().find(|r| r.segment_id == segment_id && r.status == "recording");
+        let matched = recs
+            .iter_mut()
+            .find(|r| r.segment_id == segment_id && r.status == "recording");
         match matched {
             Some(rec) => {
                 rec.ended_at = Some(now());
@@ -2303,7 +2977,10 @@ impl Database {
 
     pub fn list_call_recordings(&self, call_id: &str) -> Result<Vec<CallRecording>> {
         let entries = self.mm_get_all(MM_CALL_RECORDING, call_id)?;
-        Ok(entries.iter().filter_map(|s| serde_json::from_str(s).ok()).collect())
+        Ok(entries
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect())
     }
 
     // Random available peer for flash calls (not self, not in an active call).
@@ -2338,39 +3015,102 @@ impl Database {
     // PHASE 9: COMMISSIONS
     // ═══════════════════════════════════════════
 
-    pub fn create_commission(&self, user_id: i64, source_user_id: i64, source_tx_id: Option<i64>, tier: i32, percentage: f64, amount: i64) -> Result<i64> {
+    pub fn create_commission(
+        &self,
+        user_id: i64,
+        source_user_id: i64,
+        source_tx_id: Option<i64>,
+        tier: i32,
+        percentage: f64,
+        amount: i64,
+    ) -> Result<i64> {
         let id = self.next_seq("commissions");
-        let c = Commission { id, user_id, source_user_id, source_tx_id, tier, percentage, amount, status: "pending".into(), created_at: now(), paid_at: None };
+        let c = Commission {
+            id,
+            user_id,
+            source_user_id,
+            source_tx_id,
+            tier,
+            percentage,
+            amount,
+            status: "pending".into(),
+            created_at: now(),
+            paid_at: None,
+        };
         self.mm_add(MM_COMMISSION, &user_id.to_string(), &to_json(&c))?;
         Ok(id)
     }
 
-    pub fn get_user_commissions(&self, user_id: i64, status: Option<&str>) -> Result<Vec<serde_json::Value>> {
-        self.mm_get_all(MM_COMMISSION, &user_id.to_string())?.iter()
+    pub fn get_user_commissions(
+        &self,
+        user_id: i64,
+        status: Option<&str>,
+    ) -> Result<Vec<serde_json::Value>> {
+        self.mm_get_all(MM_COMMISSION, &user_id.to_string())?
+            .iter()
             .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok())
-            .filter(|c| status.map_or(true, |s| c["status"].as_str() == Some(s)))
-            .collect::<Vec<_>>().pipe(Ok)
+            .filter(|c| status.is_none_or(|s| c["status"].as_str() == Some(s)))
+            .collect::<Vec<_>>()
+            .pipe(Ok)
     }
 
     pub fn get_commission_summary(&self, user_id: i64) -> Result<serde_json::Value> {
         let entries = self.mm_get_all(MM_COMMISSION, &user_id.to_string())?;
-        let commissions: Vec<Commission> = entries.iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        let commissions: Vec<Commission> = entries
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect();
         let total_earned = commissions.iter().map(|c| c.amount).sum::<i64>();
-        let pending = commissions.iter().filter(|c| c.status == "pending").map(|c| c.amount).sum::<i64>();
-        let paid = commissions.iter().filter(|c| c.status == "paid").map(|c| c.amount).sum::<i64>();
-        let referrals_count = commissions.iter().map(|c| c.source_user_id).collect::<std::collections::HashSet<_>>().len() as i64;
-        Ok(serde_json::json!({"total_earned": total_earned, "pending": pending, "paid": paid, "referrals_count": referrals_count}))
+        let pending = commissions
+            .iter()
+            .filter(|c| c.status == "pending")
+            .map(|c| c.amount)
+            .sum::<i64>();
+        let paid = commissions
+            .iter()
+            .filter(|c| c.status == "paid")
+            .map(|c| c.amount)
+            .sum::<i64>();
+        let referrals_count = commissions
+            .iter()
+            .map(|c| c.source_user_id)
+            .collect::<std::collections::HashSet<_>>()
+            .len() as i64;
+        Ok(
+            serde_json::json!({"total_earned": total_earned, "pending": pending, "paid": paid, "referrals_count": referrals_count}),
+        )
     }
 
-    pub fn distribute_commissions(&self, source_user_id: i64, _source_tx_id: Option<i64>, total_amount: i64, tier1_user_id: Option<i64>, tier2_user_id: Option<i64>, tier3_user_id: Option<i64>, tier4_user_id: Option<i64>) -> Result<()> {
-        let tiers: Vec<(Option<i64>, f64)> = vec![(tier1_user_id, 0.40), (tier2_user_id, 0.20), (tier3_user_id, 0.10), (tier4_user_id, 0.05)];
+    #[allow(clippy::too_many_arguments)]
+    pub fn distribute_commissions(
+        &self,
+        source_user_id: i64,
+        _source_tx_id: Option<i64>,
+        total_amount: i64,
+        tier1_user_id: Option<i64>,
+        tier2_user_id: Option<i64>,
+        tier3_user_id: Option<i64>,
+        tier4_user_id: Option<i64>,
+    ) -> Result<()> {
+        let tiers: Vec<(Option<i64>, f64)> = vec![
+            (tier1_user_id, 0.40),
+            (tier2_user_id, 0.20),
+            (tier3_user_id, 0.10),
+            (tier4_user_id, 0.05),
+        ];
         for (i, (uid, pct)) in tiers.into_iter().enumerate() {
             if let Some(uid) = uid {
-                if uid == source_user_id { continue; }
+                if uid == source_user_id {
+                    continue;
+                }
                 let amount = (total_amount as f64 * pct) as i64;
                 if amount > 0 {
                     self.create_commission(uid, source_user_id, None, (i + 1) as i32, pct, amount)?;
-                    self.deposit(uid, amount, &format!("Commission tier {} from user #{}", i + 1, source_user_id))?;
+                    self.deposit(
+                        uid,
+                        amount,
+                        &format!("Commission tier {} from user #{}", i + 1, source_user_id),
+                    )?;
                 }
             }
         }
@@ -2379,13 +3119,20 @@ impl Database {
 
     pub fn pay_pending_commissions(&self, user_id: i64) -> Result<i64> {
         let entries = self.mm_get_all(MM_COMMISSION, &user_id.to_string())?;
-        let total: i64 = entries.iter().filter_map(|s| serde_json::from_str::<Commission>(s).ok())
-            .filter(|c| c.status == "pending").map(|c| c.amount).sum();
+        let total: i64 = entries
+            .iter()
+            .filter_map(|s| serde_json::from_str::<Commission>(s).ok())
+            .filter(|c| c.status == "pending")
+            .map(|c| c.amount)
+            .sum();
         if total > 0 {
             self.mm_remove_all(MM_COMMISSION, &user_id.to_string())?;
             for entry in &entries {
                 if let Ok(mut c) = serde_json::from_str::<Commission>(entry) {
-                    if c.status == "pending" { c.status = "paid".into(); c.paid_at = Some(now()); }
+                    if c.status == "pending" {
+                        c.status = "paid".into();
+                        c.paid_at = Some(now());
+                    }
                     self.mm_add(MM_COMMISSION, &user_id.to_string(), &to_json(&c))?;
                 }
             }
@@ -2397,50 +3144,101 @@ impl Database {
     // PHASE 9: PAYOUTS
     // ═══════════════════════════════════════════
 
-    pub fn request_payout(&self, user_id: i64, amount: i64, currency: &str, wallet_address: &str, network: &str) -> Result<i64> {
+    pub fn request_payout(
+        &self,
+        user_id: i64,
+        amount: i64,
+        currency: &str,
+        wallet_address: &str,
+        network: &str,
+    ) -> Result<i64> {
         let balance = self.get_balance(user_id)?;
-        if balance < amount { anyhow::bail!("Insufficient balance for payout: {} < {}", balance, amount); }
-        if amount < 10 { anyhow::bail!("Minimum payout is 10 YSH"); }
+        if balance < amount {
+            anyhow::bail!("Insufficient balance for payout: {} < {}", balance, amount);
+        }
+        if amount < 10 {
+            anyhow::bail!("Minimum payout is 10 YSH");
+        }
 
-        let mut w = self.get_json::<Wallet>(T_WALLET, &user_id.to_string())?.unwrap();
+        let mut w = self
+            .get_json::<Wallet>(T_WALLET, &user_id.to_string())?
+            .unwrap();
         w.balance -= amount;
         w.updated_at = now();
         self.put_json(T_WALLET, &user_id.to_string(), &w)?;
 
         let id = self.next_seq("payouts");
-        let p = Payout { id, user_id, amount, currency: currency.into(), wallet_address: wallet_address.into(), network: network.into(), status: "pending".into(), tx_hash: None, requested_at: now(), processed_at: None, admin_id: None, notes: String::new() };
+        let p = Payout {
+            id,
+            user_id,
+            amount,
+            currency: currency.into(),
+            wallet_address: wallet_address.into(),
+            network: network.into(),
+            status: "pending".into(),
+            tx_hash: None,
+            requested_at: now(),
+            processed_at: None,
+            admin_id: None,
+            notes: String::new(),
+        };
         self.mm_add(MM_PAYOUT, &user_id.to_string(), &to_json(&p))?;
 
         let tx_id = self.next_seq("transactions");
-        let tx = Transaction { id: tx_id, user_id, tx_type: "payout_request".into(), amount, description: format!("Payout {} {} to {}", amount, currency, wallet_address), target_user_id: None, created_at: now() };
+        let tx = Transaction {
+            id: tx_id,
+            user_id,
+            tx_type: "payout_request".into(),
+            amount,
+            description: format!("Payout {} {} to {}", amount, currency, wallet_address),
+            target_user_id: None,
+            created_at: now(),
+        };
         self.mm_add(MM_TRANSACTION, &user_id.to_string(), &to_json(&tx))?;
         Ok(id)
     }
 
     pub fn get_user_payouts(&self, user_id: i64) -> Result<Vec<serde_json::Value>> {
-        self.mm_get_all(MM_PAYOUT, &user_id.to_string())?.iter()
-            .filter_map(|s| serde_json::from_str(s).ok()).collect::<Vec<_>>().pipe(Ok)
+        self.mm_get_all(MM_PAYOUT, &user_id.to_string())?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect::<Vec<_>>()
+            .pipe(Ok)
     }
 
-    pub fn process_payout(&self, payout_id: i64, admin_id: i64, tx_hash: &str, approved: bool) -> Result<()> {
+    pub fn process_payout(
+        &self,
+        payout_id: i64,
+        admin_id: i64,
+        tx_hash: &str,
+        approved: bool,
+    ) -> Result<()> {
         let entries = self.mm_get_all_entries(MM_PAYOUT)?;
         for (user_key, val) in &entries {
-            if let Ok(mut p) = serde_json::from_str::<Payout>(val) {
-                if p.id == payout_id {
-                    p.status = if approved { "completed".into() } else { "rejected".into() };
-                    p.tx_hash = Some(tx_hash.to_string());
-                    p.processed_at = Some(now());
-                    p.admin_id = Some(admin_id);
-                    p.notes = if approved { "Approved".into() } else { "Rejected".into() };
-                    self.mm_remove_all(MM_PAYOUT, user_key)?;
-                    self.mm_add(MM_PAYOUT, user_key, &to_json(&p))?;
-                    if !approved {
-                        let mut w = self.get_json::<Wallet>(T_WALLET, user_key)?.unwrap();
-                        w.balance += p.amount;
-                        self.put_json(T_WALLET, user_key, &w)?;
-                    }
-                    return Ok(());
+            if let Ok(mut p) = serde_json::from_str::<Payout>(val)
+                && p.id == payout_id
+            {
+                p.status = if approved {
+                    "completed".into()
+                } else {
+                    "rejected".into()
+                };
+                p.tx_hash = Some(tx_hash.to_string());
+                p.processed_at = Some(now());
+                p.admin_id = Some(admin_id);
+                p.notes = if approved {
+                    "Approved".into()
+                } else {
+                    "Rejected".into()
+                };
+                self.mm_remove_all(MM_PAYOUT, user_key)?;
+                self.mm_add(MM_PAYOUT, user_key, &to_json(&p))?;
+                if !approved {
+                    let mut w = self.get_json::<Wallet>(T_WALLET, user_key)?.unwrap();
+                    w.balance += p.amount;
+                    self.put_json(T_WALLET, user_key, &w)?;
                 }
+                return Ok(());
             }
         }
         anyhow::bail!("Payout not found")
@@ -2465,18 +3263,40 @@ impl Database {
     // PHASE 9: FRAUD
     // ═══════════════════════════════════════════
 
-    pub fn create_fraud_alert(&self, user_id: Option<i64>, alert_type: &str, severity: &str, description: &str, evidence: &str, ip_address: Option<&str>) -> Result<i64> {
+    pub fn create_fraud_alert(
+        &self,
+        user_id: Option<i64>,
+        alert_type: &str,
+        severity: &str,
+        description: &str,
+        evidence: &str,
+        ip_address: Option<&str>,
+    ) -> Result<i64> {
         let id = self.next_seq("fraud_alerts");
-        let a = FraudAlert { id, user_id, alert_type: alert_type.into(), severity: severity.into(), description: description.into(), evidence: evidence.into(), status: "open".into(), ip_address: ip_address.map(String::from), created_at: now(), resolved_at: None, resolved_by: None };
+        let a = FraudAlert {
+            id,
+            user_id,
+            alert_type: alert_type.into(),
+            severity: severity.into(),
+            description: description.into(),
+            evidence: evidence.into(),
+            status: "open".into(),
+            ip_address: ip_address.map(String::from),
+            created_at: now(),
+            resolved_at: None,
+            resolved_by: None,
+        };
         self.mm_add(MM_FRAUD, "all", &to_json(&a))?;
         Ok(id)
     }
 
     pub fn get_fraud_alerts(&self, status: Option<&str>) -> Result<Vec<serde_json::Value>> {
-        self.mm_get_all(MM_FRAUD, "all")?.iter()
+        self.mm_get_all(MM_FRAUD, "all")?
+            .iter()
             .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok())
-            .filter(|a| status.map_or(true, |s| a["status"].as_str() == Some(s)))
-            .collect::<Vec<_>>().pipe(Ok)
+            .filter(|a| status.is_none_or(|s| a["status"].as_str() == Some(s)))
+            .collect::<Vec<_>>()
+            .pipe(Ok)
     }
 
     pub fn resolve_fraud_alert(&self, alert_id: i64, resolver_id: i64) -> Result<()> {
@@ -2484,28 +3304,36 @@ impl Database {
         self.mm_remove_all(MM_FRAUD, "all")?;
         for entry in &entries {
             if let Ok(mut a) = serde_json::from_str::<FraudAlert>(entry) {
-                if a.id == alert_id { a.status = "resolved".into(); a.resolved_at = Some(now()); a.resolved_by = Some(resolver_id); }
+                if a.id == alert_id {
+                    a.status = "resolved".into();
+                    a.resolved_at = Some(now());
+                    a.resolved_by = Some(resolver_id);
+                }
                 self.mm_add(MM_FRAUD, "all", &to_json(&a))?;
             }
         }
         Ok(())
     }
 
-    pub fn check_velocity(&self, user_id: i64, tx_type: &str, window_secs: i64) -> Result<(i64, i64)> {
+    pub fn check_velocity(
+        &self,
+        user_id: i64,
+        tx_type: &str,
+        window_secs: i64,
+    ) -> Result<(i64, i64)> {
         let entries = self.mm_get_all(MM_TRANSACTION, &user_id.to_string())?;
         let cutoff = chrono::Utc::now() - chrono::Duration::seconds(window_secs);
         let mut count = 0i64;
         let mut total_amount = 0i64;
         for entry in &entries {
-            if let Ok(tx) = serde_json::from_str::<Transaction>(entry) {
-                if tx.tx_type == tx_type {
-                    if let Ok(created) = chrono::NaiveDateTime::parse_from_str(&tx.created_at, "%Y-%m-%dT%H:%M:%SZ") {
-                        if created.and_utc() >= cutoff {
-                            count += 1;
-                            total_amount += tx.amount.abs();
-                        }
-                    }
-                }
+            if let Ok(tx) = serde_json::from_str::<Transaction>(entry)
+                && tx.tx_type == tx_type
+                && let Ok(created) =
+                    chrono::NaiveDateTime::parse_from_str(&tx.created_at, "%Y-%m-%dT%H:%M:%SZ")
+                && created.and_utc() >= cutoff
+            {
+                count += 1;
+                total_amount += tx.amount.abs();
             }
         }
         Ok((count, total_amount))
@@ -2515,11 +3343,35 @@ impl Database {
     // PHASE 9: RECEIPTS
     // ═══════════════════════════════════════════
 
-    pub fn create_receipt(&self, user_id: i64, receipt_type: &str, reference_id: i64, amount: i64, currency: &str, description: &str, metadata: &str) -> Result<i64> {
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_receipt(
+        &self,
+        user_id: i64,
+        receipt_type: &str,
+        reference_id: i64,
+        amount: i64,
+        currency: &str,
+        description: &str,
+        metadata: &str,
+    ) -> Result<i64> {
         let id = self.next_seq("receipts");
-        let content = format!("{}|{}|{}|{}|{}|{}", user_id, receipt_type, reference_id, amount, currency, description);
+        let content = format!(
+            "{}|{}|{}|{}|{}|{}",
+            user_id, receipt_type, reference_id, amount, currency, description
+        );
         let hash = blake3::hash(content.as_bytes()).to_hex().to_string();
-        let r = Receipt { id, user_id, receipt_type: receipt_type.into(), reference_id, amount, currency: currency.into(), description: description.into(), metadata: metadata.into(), receipt_hash: hash, created_at: now() };
+        let r = Receipt {
+            id,
+            user_id,
+            receipt_type: receipt_type.into(),
+            reference_id,
+            amount,
+            currency: currency.into(),
+            description: description.into(),
+            metadata: metadata.into(),
+            receipt_hash: hash,
+            created_at: now(),
+        };
         self.mm_add(MM_RECEIPT, &user_id.to_string(), &to_json(&r))?;
         Ok(id)
     }
@@ -2527,28 +3379,36 @@ impl Database {
     pub fn get_receipt(&self, receipt_id: i64) -> Result<Option<serde_json::Value>> {
         let entries = self.mm_get_all_entries(MM_RECEIPT)?;
         for (_, val) in &entries {
-            if let Ok(r) = serde_json::from_str::<Receipt>(val) {
-                if r.id == receipt_id { return Ok(Some(serde_json::to_value(r)?)); }
+            if let Ok(r) = serde_json::from_str::<Receipt>(val)
+                && r.id == receipt_id
+            {
+                return Ok(Some(serde_json::to_value(r)?));
             }
         }
         Ok(None)
     }
 
     pub fn get_user_receipts(&self, user_id: i64, limit: i64) -> Result<Vec<serde_json::Value>> {
-        self.mm_get_all(MM_RECEIPT, &user_id.to_string())?.iter()
+        self.mm_get_all(MM_RECEIPT, &user_id.to_string())?
+            .iter()
             .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok())
-            .take(limit as usize).collect::<Vec<_>>().pipe(Ok)
+            .take(limit as usize)
+            .collect::<Vec<_>>()
+            .pipe(Ok)
     }
 
     pub fn verify_receipt(&self, receipt_id: i64) -> Result<bool> {
         let entries = self.mm_get_all_entries(MM_RECEIPT)?;
         for (_, val) in &entries {
-            if let Ok(r) = serde_json::from_str::<Receipt>(val) {
-                if r.id == receipt_id {
-                    let content = format!("{}|{}|{}|{}|{}|{}", r.user_id, r.receipt_type, r.reference_id, r.amount, r.currency, r.description);
-                    let computed = blake3::hash(content.as_bytes()).to_hex().to_string();
-                    return Ok(computed == r.receipt_hash);
-                }
+            if let Ok(r) = serde_json::from_str::<Receipt>(val)
+                && r.id == receipt_id
+            {
+                let content = format!(
+                    "{}|{}|{}|{}|{}|{}",
+                    r.user_id, r.receipt_type, r.reference_id, r.amount, r.currency, r.description
+                );
+                let computed = blake3::hash(content.as_bytes()).to_hex().to_string();
+                return Ok(computed == r.receipt_hash);
             }
         }
         Ok(false)
@@ -2570,17 +3430,39 @@ impl Database {
         let this_month_str = this_month();
 
         let mut sl = SpendingLimit {
-            user_id, daily_limit, monthly_limit,
-            daily_spent: if last_reset != &today_str { 0 } else { daily_spent },
-            monthly_spent: if !last_reset.starts_with(&this_month_str) { 0 } else { monthly_spent },
+            user_id,
+            daily_limit,
+            monthly_limit,
+            daily_spent: if last_reset != today_str {
+                0
+            } else {
+                daily_spent
+            },
+            monthly_spent: if !last_reset.starts_with(&this_month_str) {
+                0
+            } else {
+                monthly_spent
+            },
             last_reset_date: today_str.clone(),
         };
 
         if sl.daily_spent + amount > sl.daily_limit {
-            return Ok((false, format!("Daily limit exceeded: {} + {} > {}", sl.daily_spent, amount, sl.daily_limit)));
+            return Ok((
+                false,
+                format!(
+                    "Daily limit exceeded: {} + {} > {}",
+                    sl.daily_spent, amount, sl.daily_limit
+                ),
+            ));
         }
         if sl.monthly_spent + amount > sl.monthly_limit {
-            return Ok((false, format!("Monthly limit exceeded: {} + {} > {}", sl.monthly_spent, amount, sl.monthly_limit)));
+            return Ok((
+                false,
+                format!(
+                    "Monthly limit exceeded: {} + {} > {}",
+                    sl.monthly_spent, amount, sl.monthly_limit
+                ),
+            ));
         }
 
         sl.daily_spent += amount;
@@ -2590,7 +3472,14 @@ impl Database {
     }
 
     pub fn set_spending_limit(&self, user_id: i64, daily: i64, monthly: i64) -> Result<()> {
-        let sl = SpendingLimit { user_id, daily_limit: daily, monthly_limit: monthly, daily_spent: 0, monthly_spent: 0, last_reset_date: today() };
+        let sl = SpendingLimit {
+            user_id,
+            daily_limit: daily,
+            monthly_limit: monthly,
+            daily_spent: 0,
+            monthly_spent: 0,
+            last_reset_date: today(),
+        };
         self.put_json(T_SPENDING, &user_id.to_string(), &sl)
     }
 
@@ -2604,9 +3493,15 @@ impl Database {
         }
     }
 
-    pub fn update_notification_status(&self, _notification_id: i64, _status: &str) -> Result<()> { Ok(()) }
-    pub fn increment_notification_retries(&self, _notification_id: i64) -> Result<i32> { Ok(0) }
-    pub fn get_pending_notifications(&self, _limit: i64) -> Result<Vec<serde_json::Value>> { Ok(vec![]) }
+    pub fn update_notification_status(&self, _notification_id: i64, _status: &str) -> Result<()> {
+        Ok(())
+    }
+    pub fn increment_notification_retries(&self, _notification_id: i64) -> Result<i32> {
+        Ok(0)
+    }
+    pub fn get_pending_notifications(&self, _limit: i64) -> Result<Vec<serde_json::Value>> {
+        Ok(vec![])
+    }
 
     // ═══════════════════════════════════════════
     // FASE 13: USER BLOCKS
@@ -2619,7 +3514,10 @@ impl Database {
         if self.find_user_by_id(blocked_id)?.is_none() {
             anyhow::bail!("Target user not found");
         }
-        let rec = BlockRecord { blocked_user_id: blocked_id, created_at: now() };
+        let rec = BlockRecord {
+            blocked_user_id: blocked_id,
+            created_at: now(),
+        };
         self.mm_add(MM_BLOCK, &blocker_id.to_string(), &to_json(&rec))
     }
 
@@ -2636,14 +3534,20 @@ impl Database {
     }
 
     pub fn get_blocked_users(&self, blocker_id: i64) -> Result<Vec<BlockRecord>> {
-        let mut recs: Vec<BlockRecord> = self.mm_get_all(MM_BLOCK, &blocker_id.to_string())?
-            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        let mut recs: Vec<BlockRecord> = self
+            .mm_get_all(MM_BLOCK, &blocker_id.to_string())?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect();
         recs.sort_by(|a, b| b.created_at.cmp(&a.created_at));
         Ok(recs)
     }
 
     pub fn is_blocked(&self, viewer_id: i64, author_id: i64) -> Result<bool> {
-        Ok(self.get_blocked_users(viewer_id)?.iter().any(|r| r.blocked_user_id == author_id))
+        Ok(self
+            .get_blocked_users(viewer_id)?
+            .iter()
+            .any(|r| r.blocked_user_id == author_id))
     }
 
     // ═══════════════════════════════════════════
@@ -2675,7 +3579,12 @@ impl Database {
         }
         if !rewrote {
             let id = self.next_seq("user_ratings");
-            let r = Rating { id, rater_id, score, created_at: now() };
+            let r = Rating {
+                id,
+                rater_id,
+                score,
+                created_at: now(),
+            };
             self.mm_add(MM_RATING, &rated_id.to_string(), &to_json(&r))?;
         }
         self.recompute_reputation(rated_id)
@@ -2683,7 +3592,10 @@ impl Database {
 
     fn recompute_reputation(&self, user_id: i64) -> Result<()> {
         let entries = self.mm_get_all(MM_RATING, &user_id.to_string())?;
-        let ratings: Vec<Rating> = entries.iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        let ratings: Vec<Rating> = entries
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect();
         let avg = if ratings.is_empty() {
             0.0
         } else {
@@ -2698,13 +3610,21 @@ impl Database {
     }
 
     pub fn get_reputation(&self, user_id: i64) -> Result<ReputationSummary> {
-        Ok(self.get_json::<ReputationSummary>(T_REPUTATION, &user_id.to_string())?
-            .unwrap_or(ReputationSummary { user_id, rating_avg: 0.0, rating_count: 0 }))
+        Ok(self
+            .get_json::<ReputationSummary>(T_REPUTATION, &user_id.to_string())?
+            .unwrap_or(ReputationSummary {
+                user_id,
+                rating_avg: 0.0,
+                rating_count: 0,
+            }))
     }
 
     pub fn get_ratings(&self, user_id: i64) -> Result<Vec<Rating>> {
-        Ok(self.mm_get_all(MM_RATING, &user_id.to_string())?
-            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect())
+        Ok(self
+            .mm_get_all(MM_RATING, &user_id.to_string())?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect())
     }
 
     // ═══════════════════════════════════════════
@@ -2720,7 +3640,13 @@ impl Database {
             anyhow::bail!("Badge already granted");
         }
         let id = self.next_seq("verification_badges");
-        let b = VerificationBadge { id, user_id, badge_type: badge_type.into(), granted_at: now(), active: true };
+        let b = VerificationBadge {
+            id,
+            user_id,
+            badge_type: badge_type.into(),
+            granted_at: now(),
+            active: true,
+        };
         self.mm_add(MM_BADGE, &user_id.to_string(), &to_json(&b))?;
         Ok(id)
     }
@@ -2742,20 +3668,33 @@ impl Database {
     }
 
     pub fn get_user_badges(&self, user_id: i64) -> Result<Vec<VerificationBadge>> {
-        Ok(self.mm_get_all(MM_BADGE, &user_id.to_string())?
-            .iter().filter_map(|s| serde_json::from_str(s).ok())
-            .filter(|b: &VerificationBadge| b.active).collect())
+        Ok(self
+            .mm_get_all(MM_BADGE, &user_id.to_string())?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .filter(|b: &VerificationBadge| b.active)
+            .collect())
     }
 
     pub fn has_badge(&self, user_id: i64, badge_type: &str) -> Result<bool> {
-        Ok(self.get_user_badges(user_id)?.iter().any(|b| b.badge_type == badge_type))
+        Ok(self
+            .get_user_badges(user_id)?
+            .iter()
+            .any(|b| b.badge_type == badge_type))
     }
 
     // ═══════════════════════════════════════════
     // FASE 13: USER REPORTS
     // ═══════════════════════════════════════════
 
-    pub fn create_report(&self, reporter_id: i64, target_type: &str, target_id: i64, category: &str, description: &str) -> Result<i64> {
+    pub fn create_report(
+        &self,
+        reporter_id: i64,
+        target_type: &str,
+        target_id: i64,
+        category: &str,
+        description: &str,
+    ) -> Result<i64> {
         let id = self.next_seq("reports");
         let r = Report {
             id,
@@ -2771,13 +3710,21 @@ impl Database {
         };
         self.mm_add(MM_REPORT, "all", &to_json(&r))?;
         let severity = report_severity(category);
-        self.enqueue_moderation_item("report", id, severity, format!("Report #{}: {} ({})", id, category, target_type))?;
+        self.enqueue_moderation_item(
+            "report",
+            id,
+            severity,
+            format!("Report #{}: {} ({})", id, category, target_type),
+        )?;
         Ok(id)
     }
 
     pub fn get_reports(&self, status: Option<&str>) -> Result<Vec<Report>> {
-        let mut reports: Vec<Report> = self.mm_get_all(MM_REPORT, "all")?
-            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        let mut reports: Vec<Report> = self
+            .mm_get_all(MM_REPORT, "all")?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect();
         if let Some(status) = status {
             reports.retain(|r| r.status == status);
         }
@@ -2802,8 +3749,10 @@ impl Database {
     }
 
     pub fn get_user_reports(&self, reporter_id: i64) -> Result<Vec<Report>> {
-        let mut reports: Vec<Report> = self.mm_get_all(MM_REPORT, "all")?
-            .iter().filter_map(|s| serde_json::from_str(s).ok())
+        let mut reports: Vec<Report> = self
+            .mm_get_all(MM_REPORT, "all")?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
             .filter(|r: &Report| r.reporter_id == reporter_id)
             .collect();
         reports.sort_by(|a, b| b.created_at.cmp(&a.created_at));
@@ -2812,17 +3761,21 @@ impl Database {
 
     pub fn count_open_reports_for(&self, target_type: &str, target_id: i64) -> Result<i64> {
         let reports = self.get_reports(None)?;
-        Ok(reports.iter()
-            .filter(|r| r.target_type == target_type && r.target_id == target_id
-                && r.status != "dismissed")
+        Ok(reports
+            .iter()
+            .filter(|r| {
+                r.target_type == target_type && r.target_id == target_id && r.status != "dismissed"
+            })
             .count() as i64)
     }
 
     pub fn distinct_reporters_for(&self, target_type: &str, target_id: i64) -> Result<i64> {
         let reports = self.get_reports(None)?;
-        let reporters: std::collections::HashSet<i64> = reports.iter()
-            .filter(|r| r.target_type == target_type && r.target_id == target_id
-                && r.status != "dismissed")
+        let reporters: std::collections::HashSet<i64> = reports
+            .iter()
+            .filter(|r| {
+                r.target_type == target_type && r.target_id == target_id && r.status != "dismissed"
+            })
             .map(|r| r.reporter_id)
             .collect();
         Ok(reporters.len() as i64)
@@ -2832,7 +3785,15 @@ impl Database {
     // FASE 13: CONTENT FLAGS (auto + manual)
     // ═══════════════════════════════════════════
 
-    pub fn flag_content(&self, flag_type: &str, source: &str, target_type: &str, target_id: i64, severity: f64, description: &str) -> Result<i64> {
+    pub fn flag_content(
+        &self,
+        flag_type: &str,
+        source: &str,
+        target_type: &str,
+        target_id: i64,
+        severity: f64,
+        description: &str,
+    ) -> Result<i64> {
         let id = self.next_seq("content_flags");
         let f = ContentFlag {
             id,
@@ -2848,20 +3809,30 @@ impl Database {
             resolved_by: None,
         };
         self.mm_add(MM_CONTENT_FLAG, "all", &to_json(&f))?;
-        self.enqueue_moderation_item("content_flag", id, severity, format!("Content flag #{}: {} on {}", id, flag_type, target_type))?;
+        self.enqueue_moderation_item(
+            "content_flag",
+            id,
+            severity,
+            format!("Content flag #{}: {} on {}", id, flag_type, target_type),
+        )?;
         Ok(id)
     }
 
     pub fn get_content_flags(&self, status: Option<&str>) -> Result<Vec<ContentFlag>> {
-        let mut flags: Vec<ContentFlag> = self.mm_get_all(MM_CONTENT_FLAG, "all")?
-            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        let mut flags: Vec<ContentFlag> = self
+            .mm_get_all(MM_CONTENT_FLAG, "all")?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect();
         if let Some(status) = status {
             flags.retain(|f| f.status == status);
         }
-        flags.sort_by(|a, b| b.severity
-            .partial_cmp(&a.severity)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| b.created_at.cmp(&a.created_at)));
+        flags.sort_by(|a, b| {
+            b.severity
+                .partial_cmp(&a.severity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| b.created_at.cmp(&a.created_at))
+        });
         Ok(flags)
     }
 
@@ -2882,15 +3853,23 @@ impl Database {
     }
 
     pub fn is_content_blocked(&self, target_type: &str, target_id: i64) -> Result<bool> {
-        Ok(self.get_content_flags(Some("actioned"))?
-            .iter().any(|f| f.target_type == target_type && f.target_id == target_id))
+        Ok(self
+            .get_content_flags(Some("actioned"))?
+            .iter()
+            .any(|f| f.target_type == target_type && f.target_id == target_id))
     }
 
     // ═══════════════════════════════════════════
     // FASE 13: MODERATION QUEUE (priority by severity)
     // ═══════════════════════════════════════════
 
-    pub fn enqueue_moderation_item(&self, item_type: &str, reference_id: i64, severity: f64, notes: impl Into<String>) -> Result<i64> {
+    pub fn enqueue_moderation_item(
+        &self,
+        item_type: &str,
+        reference_id: i64,
+        severity: f64,
+        notes: impl Into<String>,
+    ) -> Result<i64> {
         let id = self.next_seq("mod_queue");
         let item = ModQueueItem {
             id,
@@ -2906,15 +3885,20 @@ impl Database {
     }
 
     pub fn get_moderation_queue(&self, status: Option<&str>) -> Result<Vec<ModQueueItem>> {
-        let mut items: Vec<ModQueueItem> = self.mm_get_all(MM_MOD_QUEUE, "queue")?
-            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        let mut items: Vec<ModQueueItem> = self
+            .mm_get_all(MM_MOD_QUEUE, "queue")?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect();
         if let Some(status) = status {
             items.retain(|i| i.status == status);
         }
-        items.sort_by(|a, b| b.severity
-            .partial_cmp(&a.severity)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| b.created_at.cmp(&a.created_at)));
+        items.sort_by(|a, b| {
+            b.severity
+                .partial_cmp(&a.severity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| b.created_at.cmp(&a.created_at))
+        });
         Ok(items)
     }
 
@@ -2940,15 +3924,26 @@ impl Database {
     // FASE 13: SHADOW BANS
     // ═══════════════════════════════════════════
 
-    pub fn shadow_ban_user(&self, user_id: i64, reason: &str, duration_secs: Option<i64>) -> Result<()> {
+    pub fn shadow_ban_user(
+        &self,
+        user_id: i64,
+        reason: &str,
+        duration_secs: Option<i64>,
+    ) -> Result<()> {
         if self.is_shadow_banned(user_id)? {
             return Ok(());
         }
         let banned_until = duration_secs.map(|secs| {
             (chrono::Utc::now() + chrono::Duration::seconds(secs))
-                .format("%Y-%m-%dT%H:%M:%SZ").to_string()
+                .format("%Y-%m-%dT%H:%M:%SZ")
+                .to_string()
         });
-        let sb = ShadowBan { user_id, banned_at: now(), reason: reason.into(), banned_until };
+        let sb = ShadowBan {
+            user_id,
+            banned_at: now(),
+            reason: reason.into(),
+            banned_until,
+        };
         self.mm_add(MM_SHADOW, "all", &to_json(&sb))
     }
 
@@ -2969,13 +3964,17 @@ impl Database {
     }
 
     pub fn get_shadow_bans(&self) -> Result<Vec<ShadowBan>> {
-        Ok(self.mm_get_all(MM_SHADOW, "all")?
-            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect())
+        Ok(self
+            .mm_get_all(MM_SHADOW, "all")?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect())
     }
 
     pub fn active_shadow_ban_ids(&self) -> Result<std::collections::HashSet<i64>> {
         let now_str = now();
-        Ok(self.get_shadow_bans()?
+        Ok(self
+            .get_shadow_bans()?
             .into_iter()
             .filter(|sb| match &sb.banned_until {
                 Some(until) => until > &now_str,
@@ -3000,7 +3999,13 @@ impl Database {
     // FASE 13: APPEALS
     // ═══════════════════════════════════════════
 
-    pub fn create_appeal(&self, user_id: i64, target_type: &str, target_id: i64, reason: &str) -> Result<i64> {
+    pub fn create_appeal(
+        &self,
+        user_id: i64,
+        target_type: &str,
+        target_id: i64,
+        reason: &str,
+    ) -> Result<i64> {
         let id = self.next_seq("appeals");
         let a = Appeal {
             id,
@@ -3015,13 +4020,20 @@ impl Database {
             admin_notes: String::new(),
         };
         self.mm_add(MM_APPEAL, "all", &to_json(&a))?;
-        self.enqueue_moderation_item("appeal", id, 0.7, format!("Appeal #{}: {} #{}", id, target_type, target_id))?;
+        self.enqueue_moderation_item(
+            "appeal",
+            id,
+            0.7,
+            format!("Appeal #{}: {} #{}", id, target_type, target_id),
+        )?;
         Ok(id)
     }
 
     pub fn get_user_appeals(&self, user_id: i64) -> Result<Vec<Appeal>> {
-        let mut appeals: Vec<Appeal> = self.mm_get_all(MM_APPEAL, "all")?
-            .iter().filter_map(|s| serde_json::from_str(s).ok())
+        let mut appeals: Vec<Appeal> = self
+            .mm_get_all(MM_APPEAL, "all")?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
             .filter(|a: &Appeal| a.user_id == user_id)
             .collect();
         appeals.sort_by(|a, b| b.created_at.cmp(&a.created_at));
@@ -3029,8 +4041,11 @@ impl Database {
     }
 
     pub fn get_appeals(&self, status: Option<&str>) -> Result<Vec<Appeal>> {
-        let mut appeals: Vec<Appeal> = self.mm_get_all(MM_APPEAL, "all")?
-            .iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        let mut appeals: Vec<Appeal> = self
+            .mm_get_all(MM_APPEAL, "all")?
+            .iter()
+            .filter_map(|s| serde_json::from_str(s).ok())
+            .collect();
         if let Some(status) = status {
             appeals.retain(|a| a.status == status);
         }
@@ -3038,13 +4053,23 @@ impl Database {
         Ok(appeals)
     }
 
-    pub fn resolve_appeal(&self, appeal_id: i64, resolver_id: i64, approved: bool, admin_notes: &str) -> Result<()> {
+    pub fn resolve_appeal(
+        &self,
+        appeal_id: i64,
+        resolver_id: i64,
+        approved: bool,
+        admin_notes: &str,
+    ) -> Result<()> {
         let entries = self.mm_get_all(MM_APPEAL, "all")?;
         self.mm_remove_all(MM_APPEAL, "all")?;
         for entry in &entries {
             if let Ok(mut a) = serde_json::from_str::<Appeal>(entry) {
                 if a.id == appeal_id && a.status == "open" {
-                    a.status = if approved { "approved".into() } else { "rejected".into() };
+                    a.status = if approved {
+                        "approved".into()
+                    } else {
+                        "rejected".into()
+                    };
                     a.reviewed_at = Some(now());
                     a.reviewed_by = Some(resolver_id);
                     a.admin_notes = admin_notes.to_string();
@@ -3083,7 +4108,9 @@ impl Database {
         }
 
         if let Some(u) = self.find_user_by_id(user_id)? {
-            if let Ok(created) = chrono::NaiveDateTime::parse_from_str(&u.created_at, "%Y-%m-%dT%H:%M:%SZ") {
+            if let Ok(created) =
+                chrono::NaiveDateTime::parse_from_str(&u.created_at, "%Y-%m-%dT%H:%M:%SZ")
+            {
                 let age_days = (chrono::Utc::now() - created.and_utc()).num_days();
                 score += (age_days as f64 / 30.0).min(1.0) * cfg.account_age_bonus_max;
             }
@@ -3095,14 +4122,20 @@ impl Database {
         }
 
         let reports = self.get_reports(None)?;
-        let report_count = reports.iter()
-            .filter(|r| r.target_type == "user" && r.target_id == user_id && r.status != "dismissed")
+        let report_count = reports
+            .iter()
+            .filter(|r| {
+                r.target_type == "user" && r.target_id == user_id && r.status != "dismissed"
+            })
             .count() as f64;
         score -= report_count * cfg.report_penalty;
 
         let flags = self.get_content_flags(None)?;
-        let flag_count = flags.iter()
-            .filter(|f| f.target_type == "user" && f.target_id == user_id && f.status != "dismissed")
+        let flag_count = flags
+            .iter()
+            .filter(|f| {
+                f.target_type == "user" && f.target_id == user_id && f.status != "dismissed"
+            })
             .count() as f64;
         score -= flag_count * cfg.flag_penalty;
 
@@ -3120,11 +4153,15 @@ impl Database {
         let score = score.clamp(0.0, 100.0);
         let stored = serde_json::json!({ "updated_at": now() });
         let _ = stored;
-        self.put_json(T_TRUST, &user_id.to_string(), &serde_json::json!({
-            "user_id": user_id,
-            "score": (score * 10.0).round() / 10.0,
-            "updated_at": now(),
-        }))?;
+        self.put_json(
+            T_TRUST,
+            &user_id.to_string(),
+            &serde_json::json!({
+                "user_id": user_id,
+                "score": (score * 10.0).round() / 10.0,
+                "updated_at": now(),
+            }),
+        )?;
         Ok(score)
     }
 
@@ -3146,10 +4183,10 @@ impl Database {
         let day = today();
         let key = format!("{}::{}", day, user_id);
         for existing in self.mm_get_all(MM_USER_ACTIVITY, &key)? {
-            if let Ok(ev) = serde_json::from_str::<serde_json::Value>(&existing) {
-                if ev["action"] == action {
-                    return Ok(());
-                }
+            if let Ok(ev) = serde_json::from_str::<serde_json::Value>(&existing)
+                && ev["action"] == action
+            {
+                return Ok(());
             }
         }
         let entry = serde_json::json!({ "user_id": user_id, "action": action, "ts": now() });
@@ -3169,13 +4206,13 @@ impl Database {
     pub fn set_staking_recalc(&self, stake_id: i64, last_reward_calc: &str) -> Result<()> {
         let entries = self.mm_get_all_entries(MM_STAKING)?;
         for (user_key, val) in &entries {
-            if let Ok(mut s) = serde_json::from_str::<Staking>(val) {
-                if s.id == stake_id {
-                    s.last_reward_calc = last_reward_calc.to_string();
-                    self.mm_remove_one(MM_STAKING, user_key, val)?;
-                    self.mm_add(MM_STAKING, user_key, &to_json(&s))?;
-                    return Ok(());
-                }
+            if let Ok(mut s) = serde_json::from_str::<Staking>(val)
+                && s.id == stake_id
+            {
+                s.last_reward_calc = last_reward_calc.to_string();
+                self.mm_remove_one(MM_STAKING, user_key, val)?;
+                self.mm_add(MM_STAKING, user_key, &to_json(&s))?;
+                return Ok(());
             }
         }
         anyhow::bail!("Stake not found")
@@ -3229,7 +4266,11 @@ impl Database {
             self.mm_remove_one(MM_USER_ACTIVITY, &key, &val)?;
             if let Ok(mut ev) = serde_json::from_str::<serde_json::Value>(&val) {
                 ev["ts"] = serde_json::Value::String(shifted_ts);
-                self.mm_add(MM_USER_ACTIVITY, &format!("{}::{}", shifted_day, uid), &to_json(&ev))?;
+                self.mm_add(
+                    MM_USER_ACTIVITY,
+                    &format!("{}::{}", shifted_day, uid),
+                    &to_json(&ev),
+                )?;
                 aged += 1;
             }
         }
@@ -3243,17 +4284,17 @@ impl Database {
         let mut processed = 0i64;
         let mut total = 0i64;
         for (user_key, val) in &entries {
-            if let Ok(mut p) = serde_json::from_str::<Payout>(val) {
-                if p.status == "pending" {
-                    p.status = "completed".into();
-                    p.tx_hash = Some(format!("0xauto{:08x}", p.id));
-                    p.processed_at = Some(now());
-                    p.notes = "Automated disbursement".into();
-                    self.mm_remove_one(MM_PAYOUT, user_key, val)?;
-                    self.mm_add(MM_PAYOUT, user_key, &to_json(&p))?;
-                    processed += 1;
-                    total += p.amount;
-                }
+            if let Ok(mut p) = serde_json::from_str::<Payout>(val)
+                && p.status == "pending"
+            {
+                p.status = "completed".into();
+                p.tx_hash = Some(format!("0xauto{:08x}", p.id));
+                p.processed_at = Some(now());
+                p.notes = "Automated disbursement".into();
+                self.mm_remove_one(MM_PAYOUT, user_key, val)?;
+                self.mm_add(MM_PAYOUT, user_key, &to_json(&p))?;
+                processed += 1;
+                total += p.amount;
             }
         }
         Ok(serde_json::json!({ "processed": processed, "total_amount": total }))
@@ -3279,7 +4320,8 @@ impl Database {
                 if days < 0.5 {
                     continue; // cooldown to avoid rounding noise
                 }
-                let interest = ((s.amount as f64) * (s.apy_rate / 100.0) * (days / 365.0)).floor() as i64;
+                let interest =
+                    ((s.amount as f64) * (s.apy_rate / 100.0) * (days / 365.0)).floor() as i64;
                 if interest > 0 {
                     s.rewards_earned += interest;
                     s.last_reward_calc = now();
@@ -3335,47 +4377,56 @@ impl Database {
 
     /// CLEANUP WORKER: removes stale match queue entries (>10 min waiting),
     /// expired call quality samples, and activity data older than retention.
-    pub fn cleanup_expired(&self, analytics_retention_days: i64, quality_retention_days: i64) -> Result<serde_json::Value> {
+    pub fn cleanup_expired(
+        &self,
+        analytics_retention_days: i64,
+        quality_retention_days: i64,
+    ) -> Result<serde_json::Value> {
         let now_utc = chrono::Utc::now();
         let mut removed = 0i64;
 
         let match_entries = self.mm_get_all_entries(MM_MATCH_QUEUE)?;
         for (key, val) in &match_entries {
-            if let Ok(m) = serde_json::from_str::<serde_json::Value>(val) {
-                if m["status"] == "waiting"
-                    && m["queued_at"].as_str().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                        .map(|c| (now_utc - c.with_timezone(&chrono::Utc)).num_seconds() > 600)
-                        .unwrap_or(false)
-                {
-                    self.mm_remove_one(MM_MATCH_QUEUE, key, val)?;
-                    removed += 1;
-                }
+            if let Ok(m) = serde_json::from_str::<serde_json::Value>(val)
+                && m["status"] == "waiting"
+                && m["queued_at"]
+                    .as_str()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|c| (now_utc - c.with_timezone(&chrono::Utc)).num_seconds() > 600)
+                    .unwrap_or(false)
+            {
+                self.mm_remove_one(MM_MATCH_QUEUE, key, val)?;
+                removed += 1;
             }
         }
 
         let quality_entries = self.mm_get_all_entries(MM_CALL_QUALITY)?;
         for (key, val) in &quality_entries {
-            if let Ok(q) = serde_json::from_str::<serde_json::Value>(val) {
-                if q["ts"].as_str().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                    .map(|t| (now_utc - t.with_timezone(&chrono::Utc)).num_seconds() > quality_retention_days * 86400)
+            if let Ok(q) = serde_json::from_str::<serde_json::Value>(val)
+                && q["ts"]
+                    .as_str()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|t| {
+                        (now_utc - t.with_timezone(&chrono::Utc)).num_seconds()
+                            > quality_retention_days * 86400
+                    })
                     .unwrap_or(false)
-                {
-                    self.mm_remove_one(MM_CALL_QUALITY, key, val)?;
-                    removed += 1;
-                }
+            {
+                self.mm_remove_one(MM_CALL_QUALITY, key, val)?;
+                removed += 1;
             }
         }
 
         let retention_secs = analytics_retention_days * 86400;
         let activity_entries = self.mm_get_all_entries(MM_USER_ACTIVITY)?;
         for (key, _) in &activity_entries {
-            if let Some(day) = key.split("::").next() {
-                if let Ok(d) = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d") {
-                    let then = d.and_hms_opt(0, 0, 0).unwrap().and_utc();
-                    if (now_utc - then).num_seconds() > retention_secs {
-                        self.mm_remove_all(MM_USER_ACTIVITY, key)?;
-                        removed += 1;
-                    }
+            if let Some(day) = key.split("::").next()
+                && let Ok(d) = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d")
+            {
+                let then = d.and_hms_opt(0, 0, 0).unwrap().and_utc();
+                if (now_utc - then).num_seconds() > retention_secs {
+                    self.mm_remove_all(MM_USER_ACTIVITY, key)?;
+                    removed += 1;
                 }
             }
         }
@@ -3432,12 +4483,14 @@ impl Database {
                 if key.starts_with(&format!("{}::", day)) {
                     day_users.insert(uid);
                 }
-                let ts = ev["ts"].as_str().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                let ts = ev["ts"]
+                    .as_str()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                     .map(|t| t.with_timezone(&chrono::Utc));
-                if let Some(t) = ts {
-                    if t >= mau_window {
-                        mau_users.insert(uid);
-                    }
+                if let Some(t) = ts
+                    && t >= mau_window
+                {
+                    mau_users.insert(uid);
                 }
             }
         }
@@ -3472,7 +4525,8 @@ impl Database {
 
     /// Daily analytics snapshots persisted by the analytics worker.
     pub fn list_analytics_snapshots(&self, limit: i64) -> Result<Vec<serde_json::Value>> {
-        let mut rows: Vec<serde_json::Value> = self.mm_get_all_entries(MM_ANALYTICS_DAY)?
+        let mut rows: Vec<serde_json::Value> = self
+            .mm_get_all_entries(MM_ANALYTICS_DAY)?
             .iter()
             .filter_map(|(_, v)| serde_json::from_str::<serde_json::Value>(v).ok())
             .filter(|v| v["date"].is_string())
@@ -3486,15 +4540,21 @@ impl Database {
     pub fn realtime_db_metrics(&self) -> Result<serde_json::Value> {
         let mut active_calls = 0i64;
         for (_, val) in self.mm_get_all_entries(MM_CALL_BILLING)? {
-            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val) {
-                if cb.status == "active" {
-                    active_calls += 1;
-                }
+            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val)
+                && cb.status == "active"
+            {
+                active_calls += 1;
             }
         }
         let pending_reports = self.count_reports_with_status("pending")?;
-        let pending_payouts = self.mm_get_all_entries(MM_PAYOUT)?.iter()
-            .filter(|(_, v)| serde_json::from_str::<Payout>(v).map(|p| p.status == "pending").unwrap_or(false))
+        let pending_payouts = self
+            .mm_get_all_entries(MM_PAYOUT)?
+            .iter()
+            .filter(|(_, v)| {
+                serde_json::from_str::<Payout>(v)
+                    .map(|p| p.status == "pending")
+                    .unwrap_or(false)
+            })
             .count() as i64;
         Ok(serde_json::json!({
             "active_calls": active_calls,
@@ -3511,16 +4571,18 @@ impl Database {
         let mut day_to_users: BTreeMap<String, HashSet<i64>> = BTreeMap::new();
 
         for (key, val) in self.mm_get_all_entries(MM_USER_ACTIVITY)? {
-            if let Some((day, _)) = key.split_once("::") {
-                if let Ok(ev) = serde_json::from_str::<serde_json::Value>(&val) {
-                    let uid = ev["user_id"].as_i64().unwrap_or(-1);
-                    day_to_users.entry(day.to_string()).or_default().insert(uid);
-                }
+            if let Some((day, _)) = key.split_once("::")
+                && let Ok(ev) = serde_json::from_str::<serde_json::Value>(&val)
+            {
+                let uid = ev["user_id"].as_i64().unwrap_or(-1);
+                day_to_users.entry(day.to_string()).or_default().insert(uid);
             }
         }
 
         for offset in (0..days).rev() {
-            let day = (today_utc - chrono::Duration::days(offset)).format("%Y-%m-%d").to_string();
+            let day = (today_utc - chrono::Duration::days(offset))
+                .format("%Y-%m-%d")
+                .to_string();
             let dau = day_to_users.get(&day).map(|s| s.len()).unwrap_or(0) as i64;
             let new_users = self.count_signups_on(&day)?;
             series.push(serde_json::json!({ "date": day, "dau": dau, "new_users": new_users, "retention": null }));
@@ -3528,23 +4590,39 @@ impl Database {
 
         // retention: users active yesterday who are also active today.
         if series.len() >= 2 {
-            let prev = &series[series.len() - 2]["date"].as_str().unwrap_or("").to_string();
-            let curr = &series[series.len() - 1]["date"].as_str().unwrap_or("").to_string();
+            let prev = &series[series.len() - 2]["date"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+            let curr = &series[series.len() - 1]["date"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
             if let (Some(a), Some(b)) = (day_to_users.get(prev), day_to_users.get(curr)) {
                 let retained = a.intersection(b).count() as f64;
                 if !a.is_empty() {
                     let retention = retained / a.len() as f64;
-                    if let Some(v) = series.last_mut() {
-                        if let Some(obj) = v.as_object_mut() {
-                            obj.insert("retention".into(), serde_json::json!((retention * 100.0).round() / 100.0));
-                            obj.insert("churn".into(), serde_json::json!(((1.0 - retention) * 100.0).round() / 100.0));
-                        }
+                    if let Some(v) = series.last_mut()
+                        && let Some(obj) = v.as_object_mut()
+                    {
+                        obj.insert(
+                            "retention".into(),
+                            serde_json::json!((retention * 100.0).round() / 100.0),
+                        );
+                        obj.insert(
+                            "churn".into(),
+                            serde_json::json!(((1.0 - retention) * 100.0).round() / 100.0),
+                        );
                     }
                 }
             }
         }
 
-        let mau: usize = day_to_users.values().flatten().collect::<HashSet<_>>().len();
+        let mau: usize = day_to_users
+            .values()
+            .flatten()
+            .collect::<HashSet<_>>()
+            .len();
         Ok(serde_json::json!({
             "days": series,
             "summary": {
@@ -3556,14 +4634,20 @@ impl Database {
 
     /// REVENUE ANALYTICS: MRR proxy, ARPU, LTV and gift/call economy totals.
     pub fn get_revenue_analytics(&self, days: i64) -> Result<serde_json::Value> {
-        let from = (chrono::Utc::now().date_naive() - chrono::Duration::days(days - 1)).format("%Y-%m-%d").to_string();
+        let from = (chrono::Utc::now().date_naive() - chrono::Duration::days(days - 1))
+            .format("%Y-%m-%d")
+            .to_string();
         let to = today();
         let transactions = self.sum_transactions_range(&from, &to)?;
         let gifts = self.sum_gifts_range(&from, &to)?;
         let platform_fees = self.sum_call_fees_range(&from, &to)?;
         let users = self.count_users()?;
         let active = self.active_users_last(days)?;
-        let arpu = if active > 0 { (transactions + gifts) / active } else { 0 };
+        let arpu = if active > 0 {
+            (transactions + gifts) / active
+        } else {
+            0
+        };
         Ok(serde_json::json!({
             "range_days": days,
             "transactions": transactions,
@@ -3587,10 +4671,10 @@ impl Database {
         }
         let mut host_calls: BTreeMap<i64, i64> = BTreeMap::new();
         for (_, val) in self.mm_get_all_entries(MM_CALL_BILLING)? {
-            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val) {
-                if cb.status == "completed" {
-                    *host_calls.entry(cb.host_id).or_insert(0) += 1;
-                }
+            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val)
+                && cb.status == "completed"
+            {
+                *host_calls.entry(cb.host_id).or_insert(0) += 1;
             }
         }
 
@@ -3620,18 +4704,23 @@ impl Database {
     pub fn get_host_leaderboard(&self, limit: i64) -> Result<Vec<serde_json::Value>> {
         let mut per_host: BTreeMap<i64, (i64, i64)> = BTreeMap::new();
         for (_, val) in self.mm_get_all_entries(MM_CALL_BILLING)? {
-            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val) {
-                if cb.status == "completed" {
-                    let e = per_host.entry(cb.host_id).or_insert((0, 0));
-                    e.0 += 1;
-                    e.1 += cb.host_earnings;
-                }
+            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val)
+                && cb.status == "completed"
+            {
+                let e = per_host.entry(cb.host_id).or_insert((0, 0));
+                e.0 += 1;
+                e.1 += cb.host_earnings;
             }
         }
         let mut rows: Vec<serde_json::Value> = per_host.iter().map(|(uid, (calls, earned))| {
             serde_json::json!({ "host_id": uid, "calls": calls, "earnings": earned })
         }).collect();
-        rows.sort_by(|a, b| b["earnings"].as_i64().unwrap_or(0).cmp(&a["earnings"].as_i64().unwrap_or(0)));
+        rows.sort_by(|a, b| {
+            b["earnings"]
+                .as_i64()
+                .unwrap_or(0)
+                .cmp(&a["earnings"].as_i64().unwrap_or(0))
+        });
         rows.truncate(limit.max(1) as usize);
         Ok(rows)
     }
@@ -3649,10 +4738,17 @@ impl Database {
             }
         }
         let total: i64 = regions.values().sum();
-        let distribution: Vec<serde_json::Value> = regions.iter().map(|(r, c)| {
-            let pct = if total > 0 { (*c as f64 / total as f64 * 100.0) as i64 } else { 0 };
-            serde_json::json!({ "region": r, "users": c, "pct": pct })
-        }).collect();
+        let distribution: Vec<serde_json::Value> = regions
+            .iter()
+            .map(|(r, c)| {
+                let pct = if total > 0 {
+                    (*c as f64 / total as f64 * 100.0) as i64
+                } else {
+                    0
+                };
+                serde_json::json!({ "region": r, "users": c, "pct": pct })
+            })
+            .collect();
         Ok(serde_json::json!({ "total_users": total, "distribution": distribution }))
     }
 
@@ -3680,10 +4776,10 @@ impl Database {
         for val in self.mm_get_all(MM_SHADOW, "all")? {
             if let Ok(sb) = serde_json::from_str::<ShadowBan>(&val) {
                 if let Some(until) = &sb.banned_until {
-                    if let Ok(u) = chrono::DateTime::parse_from_rfc3339(until) {
-                        if chrono::Utc::now() < u.with_timezone(&chrono::Utc) {
-                            shadow_bans += 1;
-                        }
+                    if let Ok(u) = chrono::DateTime::parse_from_rfc3339(until)
+                        && chrono::Utc::now() < u.with_timezone(&chrono::Utc)
+                    {
+                        shadow_bans += 1;
                     }
                 } else {
                     shadow_bans += 1;
@@ -3704,10 +4800,13 @@ impl Database {
         let mut count = 0i64;
         for entry in t.iter()? {
             let (_, v) = entry?;
-            if let Ok(u) = serde_json::from_str::<serde_json::Value>(v.value()) {
-                if u["created_at"].as_str().map(|s| s.starts_with(day)).unwrap_or(false) {
-                    count += 1;
-                }
+            if let Ok(u) = serde_json::from_str::<serde_json::Value>(v.value())
+                && u["created_at"]
+                    .as_str()
+                    .map(|s| s.starts_with(day))
+                    .unwrap_or(false)
+            {
+                count += 1;
             }
         }
         Ok(count)
@@ -3724,12 +4823,13 @@ impl Database {
         let mut users: HashSet<i64> = HashSet::new();
         for (key, val) in self.mm_get_all_entries(MM_USER_ACTIVITY)? {
             let _ = key;
-            if let Ok(ev) = serde_json::from_str::<serde_json::Value>(&val) {
-                if let Some(ts) = ev["ts"].as_str().and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()) {
-                    if ts.with_timezone(&chrono::Utc) >= cutoff {
-                        users.insert(ev["user_id"].as_i64().unwrap_or(-1));
-                    }
-                }
+            if let Ok(ev) = serde_json::from_str::<serde_json::Value>(&val)
+                && let Some(ts) = ev["ts"]
+                    .as_str()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                && ts.with_timezone(&chrono::Utc) >= cutoff
+            {
+                users.insert(ev["user_id"].as_i64().unwrap_or(-1));
             }
         }
         Ok(users.len() as i64)
@@ -3738,10 +4838,10 @@ impl Database {
     fn sum_transactions_on(&self, day: &str) -> Result<i64> {
         let mut total = 0i64;
         for (_, val) in self.mm_get_all_entries(MM_TRANSACTION)? {
-            if let Ok(t) = serde_json::from_str::<Transaction>(&val) {
-                if t.created_at.starts_with(day) {
-                    total += t.amount.abs();
-                }
+            if let Ok(t) = serde_json::from_str::<Transaction>(&val)
+                && t.created_at.starts_with(day)
+            {
+                total += t.amount.abs();
             }
         }
         Ok(total)
@@ -3750,12 +4850,12 @@ impl Database {
     pub fn sum_transactions_range(&self, from: &str, to: &str) -> Result<i64> {
         let mut total = 0i64;
         for (_, val) in self.mm_get_all_entries(MM_TRANSACTION)? {
-            if let Ok(t) = serde_json::from_str::<Transaction>(&val) {
-                if t.created_at.len() >= 10 {
-                    let day = &t.created_at[..10];
-                    if day >= from && day <= to {
-                        total += t.amount.abs();
-                    }
+            if let Ok(t) = serde_json::from_str::<Transaction>(&val)
+                && t.created_at.len() >= 10
+            {
+                let day = &t.created_at[..10];
+                if day >= from && day <= to {
+                    total += t.amount.abs();
                 }
             }
         }
@@ -3768,10 +4868,10 @@ impl Database {
             if key.parse::<i64>().is_err() {
                 continue; // skip "from_" copies to avoid double counting
             }
-            if let Ok(g) = serde_json::from_str::<GiftRecord>(&val) {
-                if g.created_at.starts_with(day) {
-                    total += g.price;
-                }
+            if let Ok(g) = serde_json::from_str::<GiftRecord>(&val)
+                && g.created_at.starts_with(day)
+            {
+                total += g.price;
             }
         }
         Ok(total)
@@ -3783,12 +4883,12 @@ impl Database {
             if key.parse::<i64>().is_err() {
                 continue;
             }
-            if let Ok(g) = serde_json::from_str::<GiftRecord>(&val) {
-                if g.created_at.len() >= 10 {
-                    let day = &g.created_at[..10];
-                    if day >= from && day <= to {
-                        total += g.price;
-                    }
+            if let Ok(g) = serde_json::from_str::<GiftRecord>(&val)
+                && g.created_at.len() >= 10
+            {
+                let day = &g.created_at[..10];
+                if day >= from && day <= to {
+                    total += g.price;
                 }
             }
         }
@@ -3798,10 +4898,10 @@ impl Database {
     fn count_calls_on(&self, day: &str) -> Result<i64> {
         let mut count = 0i64;
         for (_, val) in self.mm_get_all_entries(MM_CALL_BILLING)? {
-            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val) {
-                if cb.started_at.starts_with(day) {
-                    count += 1;
-                }
+            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val)
+                && cb.started_at.starts_with(day)
+            {
+                count += 1;
             }
         }
         Ok(count)
@@ -3810,12 +4910,13 @@ impl Database {
     pub fn sum_call_fees_range(&self, from: &str, to: &str) -> Result<i64> {
         let mut total = 0i64;
         for (_, val) in self.mm_get_all_entries(MM_CALL_BILLING)? {
-            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val) {
-                if cb.status == "completed" && cb.started_at.len() >= 10 {
-                    let day = &cb.started_at[..10];
-                    if day >= from && day <= to {
-                        total += cb.platform_fee;
-                    }
+            if let Ok(cb) = serde_json::from_str::<CallBilling>(&val)
+                && cb.status == "completed"
+                && cb.started_at.len() >= 10
+            {
+                let day = &cb.started_at[..10];
+                if day >= from && day <= to {
+                    total += cb.platform_fee;
                 }
             }
         }
@@ -3825,10 +4926,13 @@ impl Database {
     fn count_messages_on(&self, day: &str) -> Result<i64> {
         let mut count = 0i64;
         for (_, val) in self.mm_get_all_entries(MM_MSG)? {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&val) {
-                if v["created_at"].as_str().map(|s| s.starts_with(day)).unwrap_or(false) {
-                    count += 1;
-                }
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&val)
+                && v["created_at"]
+                    .as_str()
+                    .map(|s| s.starts_with(day))
+                    .unwrap_or(false)
+            {
+                count += 1;
             }
         }
         Ok(count)
@@ -3837,10 +4941,10 @@ impl Database {
     fn count_reports_with_status(&self, status: &str) -> Result<i64> {
         let mut count = 0i64;
         for val in self.mm_get_all(MM_REPORT, "all")? {
-            if let Ok(r) = serde_json::from_str::<Report>(&val) {
-                if r.status == status {
-                    count += 1;
-                }
+            if let Ok(r) = serde_json::from_str::<Report>(&val)
+                && r.status == status
+            {
+                count += 1;
             }
         }
         Ok(count)
@@ -3849,11 +4953,19 @@ impl Database {
 
 // Helper trait
 trait Pipe {
-    fn pipe<F, R>(self, f: F) -> R where F: FnOnce(Self) -> R, Self: Sized;
+    fn pipe<F, R>(self, f: F) -> R
+    where
+        F: FnOnce(Self) -> R,
+        Self: Sized;
 }
 
 impl<T> Pipe for T {
-    fn pipe<F, R>(self, f: F) -> R where F: FnOnce(Self) -> R { f(self) }
+    fn pipe<F, R>(self, f: F) -> R
+    where
+        F: FnOnce(Self) -> R,
+    {
+        f(self)
+    }
 }
 
 fn report_severity(category: &str) -> f64 {
@@ -3867,20 +4979,15 @@ fn report_severity(category: &str) -> f64 {
 }
 
 fn trust_level(score: f64) -> &'static str {
-    if score >= 80.0 { "excellent" }
-    else if score >= 60.0 { "good" }
-    else if score >= 40.0 { "watch" }
-    else { "restricted" }
+    if score >= 80.0 {
+        "excellent"
+    } else if score >= 60.0 {
+        "good"
+    } else if score >= 40.0 {
+        "watch"
+    } else {
+        "restricted"
+    }
 }
 
 // Default impl for User
-impl Default for User {
-    fn default() -> Self {
-        Self {
-            id: 0, username: String::new(), email: String::new(), password_hash: String::new(),
-            role: String::new(), created_at: String::new(), failed_login_attempts: 0,
-            locked_until: None, totp_secret: None, totp_enabled: false, kyc_level: 0, do_not_sell: false,
-            region: String::new(),
-        }
-    }
-}

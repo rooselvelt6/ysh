@@ -1,9 +1,9 @@
 use aes_gcm::aead::Aead;
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+use anyhow::Result;
+use chacha20poly1305::ChaCha20Poly1305;
 use chacha20poly1305::aead::Aead as ChaChaAead;
 use chacha20poly1305::aead::KeyInit as ChaChaKeyInit;
-use chacha20poly1305::ChaCha20Poly1305;
-use anyhow::Result;
 
 pub struct AesCipher {
     cipher: Aes256Gcm,
@@ -76,6 +76,7 @@ impl ChaChaCipher {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum Cipher {
     Aes(AesCipher),
     ChaCha(ChaChaCipher),

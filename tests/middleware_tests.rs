@@ -15,7 +15,10 @@ mod circuit_breaker_tests {
         let cb = CircuitBreaker::new(3, Duration::from_secs(1));
         cb.record_failure();
         cb.record_failure();
-        assert!(cb.is_available(), "Should still be available at 2 failures (threshold 3)");
+        assert!(
+            cb.is_available(),
+            "Should still be available at 2 failures (threshold 3)"
+        );
     }
 
     #[test]

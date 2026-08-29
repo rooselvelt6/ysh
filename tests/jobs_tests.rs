@@ -25,7 +25,9 @@ fn auto_processes_pending_payouts() {
     let u = create_user(&db, "payer");
 
     db.deposit(u, 100000, "test").unwrap();
-    let pid = db.request_payout(u, 5000, "YSHT", "0xabc", "eth_network").unwrap();
+    let pid = db
+        .request_payout(u, 5000, "YSHT", "0xabc", "eth_network")
+        .unwrap();
     let result = db.auto_process_payouts().unwrap();
 
     assert_eq!(result["processed"].as_i64().unwrap(), 1);
@@ -78,7 +80,11 @@ fn staking_interest_accrues_over_time() {
     let interest = result["total_interest"].as_i64().unwrap();
 
     // 100_000 * 10% * 2 years = 20_000.
-    assert!(interest >= 20_000, "expected ~20k interest, got {}", interest);
+    assert!(
+        interest >= 20_000,
+        "expected ~20k interest, got {}",
+        interest
+    );
 }
 
 #[test]
@@ -101,8 +107,10 @@ fn moderation_autoresolve_expired_items() {
     let db = setup_db();
     let u = create_user(&db, "reporter");
 
-    db.enqueue_moderation_item("moment", 101, 0.9, "auto-severe").unwrap();
-    db.enqueue_moderation_item("moment", 102, 0.1, "auto-mild").unwrap();
+    db.enqueue_moderation_item("moment", 101, 0.9, "auto-severe")
+        .unwrap();
+    db.enqueue_moderation_item("moment", 102, 0.1, "auto-mild")
+        .unwrap();
 
     // Age items by rewriting created_at to 8 days ago via direct db call.
     db.age_moderation_items(8 * 86400).unwrap();
@@ -154,7 +162,9 @@ fn cleanup_removes_stale_and_old_data() {
 fn notification_flush_marks_sent() {
     let db = setup_db();
     let u = create_user(&db, "nuser");
-    let nid = db.create_notification(u, "inapp", "Hi", "Body", "{}", "inapp").unwrap();
+    let nid = db
+        .create_notification(u, "inapp", "Hi", "Body", "{}", "inapp")
+        .unwrap();
     assert_eq!(nid, 1);
 
     let result = db.flush_pending_notifications().unwrap();
@@ -172,9 +182,20 @@ fn notification_flush_marks_sent() {
 fn notification_fails_after_retries() {
     let db = setup_db();
     let u = create_user(&db, "nuser2");
-    db.create_notification(u, "inapp", "T", "B", "{}", "push").unwrap();
-    assert_eq!(db.flush_pending_notifications().unwrap()["pending"].as_i64().unwrap(), 1);
-    assert_eq!(db.flush_pending_notifications().unwrap()["pending"].as_i64().unwrap(), 1);
+    db.create_notification(u, "inapp", "T", "B", "{}", "push")
+        .unwrap();
+    assert_eq!(
+        db.flush_pending_notifications().unwrap()["pending"]
+            .as_i64()
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        db.flush_pending_notifications().unwrap()["pending"]
+            .as_i64()
+            .unwrap(),
+        1
+    );
     // 3rd sweep: retry budget exhausted -> moves to failed state.
     let result = db.flush_pending_notifications().unwrap();
     assert_eq!(result["failed"].as_i64().unwrap(), 1);
@@ -198,7 +219,10 @@ fn analytics_snapshot_records_activity_counts() {
     assert_eq!(snap["dau"], 2);
     assert!(snap["mau"].as_i64().unwrap() >= 2);
     assert_eq!(snap["new_users"].as_i64().unwrap(), 2);
-    assert_eq!(snap["date"].as_str().unwrap(), &chrono::Utc::now().format("%Y-%m-%d").to_string());
+    assert_eq!(
+        snap["date"].as_str().unwrap(),
+        &chrono::Utc::now().format("%Y-%m-%d").to_string()
+    );
 
     // Persisted + retrievable.
     let rows = db.list_analytics_snapshots(5).unwrap();

@@ -17,7 +17,9 @@ fn setup_db() -> Arc<Database> {
 }
 
 fn create_user(db: &Database, username: &str) -> i64 {
-    db.create_user(username, &format!("{}@prop.com", username), "hash").unwrap().id
+    db.create_user(username, &format!("{}@prop.com", username), "hash")
+        .unwrap()
+        .id
 }
 
 proptest! {
@@ -54,7 +56,7 @@ proptest! {
         let r1 = db.auto_resolve_moderation(7 * 86400, 0.4, 0.8).unwrap();
         let r2 = db.auto_resolve_moderation(7 * 86400, 0.4, 0.8).unwrap();
         // Mid-severity items are intentionally kept for human review.
-        let expected_first = if sev <= 0.4 { 1 } else if sev >= 0.8 { 1 } else { 0 };
+        let expected_first = if sev <= 0.4 || sev >= 0.8 { 1 } else { 0 };
         let d1 = r1["dismissed"].as_i64().unwrap() + r1["actioned"].as_i64().unwrap();
         prop_assert_eq!(d1, expected_first);
         let d2 = r2["dismissed"].as_i64().unwrap() + r2["actioned"].as_i64().unwrap();
@@ -118,17 +120,32 @@ fn econ_records_roundtrip_serde() {
     assert_eq!(back.amount, 1234);
 
     let st = Staking {
-        id: 1, user_id: u, amount: 5000, apy_rate: 0.05, status: "active".into(),
-        staked_at: "2026-01-01T00:00:00Z".into(), unlocks_at: "2026-06-01T00:00:00Z".into(),
-        rewards_earned: 0, last_reward_calc: "2026-01-01T00:00:00Z".into(),
+        id: 1,
+        user_id: u,
+        amount: 5000,
+        apy_rate: 0.05,
+        status: "active".into(),
+        staked_at: "2026-01-01T00:00:00Z".into(),
+        unlocks_at: "2026-06-01T00:00:00Z".into(),
+        rewards_earned: 0,
+        last_reward_calc: "2026-01-01T00:00:00Z".into(),
     };
     let back_st: Staking = serde_json::from_str(&serde_json::to_string(&st).unwrap()).unwrap();
     assert_eq!(back_st.amount, 5000);
 
     let p = Payout {
-        id: 1, user_id: u, amount: 100, currency: "YSH".into(), wallet_address: "0x1".into(),
-        network: "eth".into(), status: "pending".into(), tx_hash: None, requested_at: "t".into(),
-        processed_at: None, admin_id: None, notes: String::new(),
+        id: 1,
+        user_id: u,
+        amount: 100,
+        currency: "YSH".into(),
+        wallet_address: "0x1".into(),
+        network: "eth".into(),
+        status: "pending".into(),
+        tx_hash: None,
+        requested_at: "t".into(),
+        processed_at: None,
+        admin_id: None,
+        notes: String::new(),
     };
     let back_p: Payout = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
     assert!(back_p.tx_hash.is_none());

@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 
 use crate::auth::jwt::AuthUser;
@@ -12,9 +12,10 @@ pub async fn create_moment(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let _ = state.db.log_activity(user_id, "moment");
 
@@ -25,11 +26,9 @@ pub async fn create_moment(
     let cfg = &state.config.moderation;
     let mut auto_mod = None;
     if cfg.auto_moderation_enabled && cfg.auto_moderate_moments {
-        let moderation = state
-            .ai_engine
-            .moderate_text(crate::ai::ModerateRequest {
-                content: content.to_string(),
-            });
+        let moderation = state.ai_engine.moderate_text(crate::ai::ModerateRequest {
+            content: content.to_string(),
+        });
         match moderation.decision {
             crate::ai::ModerationDecision::Block => {
                 let _ = state.db.flag_content(
@@ -82,9 +81,10 @@ pub async fn get_feed(
     State(state): State<AppState>,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let offset: i64 = params
         .get("offset")
@@ -111,9 +111,10 @@ pub async fn like_moment(
     State(state): State<AppState>,
     Path(moment_id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     state
         .db
@@ -130,9 +131,10 @@ pub async fn unlike_moment(
     State(state): State<AppState>,
     Path(moment_id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     state
         .db
@@ -150,9 +152,10 @@ pub async fn comment(
     Path(moment_id): Path<i64>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let content = req["content"]
         .as_str()
@@ -189,9 +192,10 @@ pub async fn delete_moment(
     State(state): State<AppState>,
     Path(moment_id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let deleted = state
         .db
@@ -201,6 +205,9 @@ pub async fn delete_moment(
     if deleted {
         Ok(Json(serde_json::json!({"message": "Moment deleted"})))
     } else {
-        Err((StatusCode::NOT_FOUND, "Moment not found or not yours".into()))
+        Err((
+            StatusCode::NOT_FOUND,
+            "Moment not found or not yours".into(),
+        ))
     }
 }

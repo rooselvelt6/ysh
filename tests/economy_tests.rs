@@ -202,7 +202,9 @@ fn commission_create_and_get() {
     let user = create_user(&db, "comm1");
     let source = create_user(&db, "source1");
 
-    let id = db.create_commission(user, source, None, 1, 0.40, 400).unwrap();
+    let id = db
+        .create_commission(user, source, None, 1, 0.40, 400)
+        .unwrap();
     assert!(id > 0);
 
     let commissions = db.get_user_commissions(user, None).unwrap();
@@ -226,7 +228,8 @@ fn commission_distribute_multi_level() {
     db.ensure_wallet(t2).unwrap();
     db.ensure_wallet(t3).unwrap();
 
-    db.distribute_commissions(source, None, 1000, Some(t1), Some(t2), Some(t3), None).unwrap();
+    db.distribute_commissions(source, None, 1000, Some(t1), Some(t2), Some(t3), None)
+        .unwrap();
 
     let s1 = db.get_commission_summary(t1).unwrap();
     assert_eq!(s1["total_earned"], 400);
@@ -245,8 +248,10 @@ fn commission_pay_pending() {
     let source = create_user(&db, "src");
 
     db.ensure_wallet(user).unwrap();
-    db.create_commission(user, source, None, 1, 0.40, 400).unwrap();
-    db.create_commission(user, source, None, 1, 0.40, 200).unwrap();
+    db.create_commission(user, source, None, 1, 0.40, 400)
+        .unwrap();
+    db.create_commission(user, source, None, 1, 0.40, 200)
+        .unwrap();
 
     let paid = db.pay_pending_commissions(user).unwrap();
     assert_eq!(paid, 600);
@@ -267,7 +272,9 @@ fn payout_request_and_history() {
     db.ensure_wallet(user).unwrap();
     db.deposit(user, 5000, "initial").unwrap();
 
-    let id = db.request_payout(user, 1000, "USDT", "TAddr123", "TRC20").unwrap();
+    let id = db
+        .request_payout(user, 1000, "USDT", "TAddr123", "TRC20")
+        .unwrap();
     assert!(id > 0);
 
     let balance = db.get_balance(user).unwrap();
@@ -308,7 +315,9 @@ fn payout_process_approve() {
     db.ensure_wallet(user).unwrap();
     db.deposit(user, 5000, "initial").unwrap();
 
-    let id = db.request_payout(user, 1000, "USDT", "TAddr", "TRC20").unwrap();
+    let id = db
+        .request_payout(user, 1000, "USDT", "TAddr", "TRC20")
+        .unwrap();
     db.process_payout(id, admin, "0xabc123", true).unwrap();
 
     let payouts = db.get_user_payouts(user).unwrap();
@@ -323,7 +332,9 @@ fn payout_process_reject_refunds() {
     db.ensure_wallet(user).unwrap();
     db.deposit(user, 5000, "initial").unwrap();
 
-    let id = db.request_payout(user, 1000, "USDT", "TAddr", "TRC20").unwrap();
+    let id = db
+        .request_payout(user, 1000, "USDT", "TAddr", "TRC20")
+        .unwrap();
     let balance_before = db.get_balance(user).unwrap();
 
     db.process_payout(id, admin, "", false).unwrap();
@@ -353,7 +364,16 @@ fn fraud_alert_create_and_resolve() {
     let db = setup_db();
     let admin = create_user(&db, "fraud_admin");
 
-    let id = db.create_fraud_alert(Some(1), "velocity", "high", "Rapid deposits", "{}", Some("1.2.3.4")).unwrap();
+    let id = db
+        .create_fraud_alert(
+            Some(1),
+            "velocity",
+            "high",
+            "Rapid deposits",
+            "{}",
+            Some("1.2.3.4"),
+        )
+        .unwrap();
     assert!(id > 0);
 
     let alerts = db.get_fraud_alerts(None).unwrap();
@@ -380,8 +400,10 @@ fn fraud_velocity_check() {
 #[test]
 fn fraud_alert_filter() {
     let db = setup_db();
-    db.create_fraud_alert(None, "velocity", "high", "alert1", "{}", None).unwrap();
-    db.create_fraud_alert(None, "duplicate", "low", "alert2", "{}", None).unwrap();
+    db.create_fraud_alert(None, "velocity", "high", "alert1", "{}", None)
+        .unwrap();
+    db.create_fraud_alert(None, "duplicate", "low", "alert2", "{}", None)
+        .unwrap();
 
     let all = db.get_fraud_alerts(None).unwrap();
     assert_eq!(all.len(), 2);
@@ -399,7 +421,9 @@ fn receipt_create_and_verify() {
     let db = setup_db();
     let user = create_user(&db, "receipt1");
 
-    let id = db.create_receipt(user, "deposit", 1, 5000, "YSH", "Test deposit", "{}").unwrap();
+    let id = db
+        .create_receipt(user, "deposit", 1, 5000, "YSH", "Test deposit", "{}")
+        .unwrap();
     assert!(id > 0);
 
     let receipt = db.get_receipt(id).unwrap();
@@ -417,8 +441,10 @@ fn receipt_list() {
     let db = setup_db();
     let user = create_user(&db, "receipt2");
 
-    db.create_receipt(user, "deposit", 1, 1000, "YSH", "d1", "{}").unwrap();
-    db.create_receipt(user, "withdraw", 2, 500, "YSH", "d2", "{}").unwrap();
+    db.create_receipt(user, "deposit", 1, 1000, "YSH", "d1", "{}")
+        .unwrap();
+    db.create_receipt(user, "withdraw", 2, 500, "YSH", "d2", "{}")
+        .unwrap();
 
     let receipts = db.get_user_receipts(user, 10).unwrap();
     assert_eq!(receipts.len(), 2);
@@ -551,7 +577,12 @@ fn gift_nft_mint_and_list() {
 
     let nfts = db.get_nft_gifts(receiver).unwrap();
     assert_eq!(nfts.len(), 1);
-    assert!(nfts[0]["token_id"].as_str().unwrap().starts_with("YSH-NFT-"));
+    assert!(
+        nfts[0]["token_id"]
+            .as_str()
+            .unwrap()
+            .starts_with("YSH-NFT-")
+    );
 }
 
 // ═══════════════════════════════════════════

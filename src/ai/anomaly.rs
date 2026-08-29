@@ -104,12 +104,7 @@ impl StreamingAnomalyDetector {
         sample
             .iter()
             .enumerate()
-            .map(|(i, v)| {
-                self.stats
-                    .get(i)
-                    .map(|st| st.z_score(*v))
-                    .unwrap_or(0.0)
-            })
+            .map(|(i, v)| self.stats.get(i).map(|st| st.z_score(*v)).unwrap_or(0.0))
             .collect()
     }
 }

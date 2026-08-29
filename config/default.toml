@@ -48,6 +48,7 @@ host = "0.0.0.0"
 port = { env = "YSH_PORT", default = 8080, type = "u16" }
 workers = 4
 shutdown_timeout_secs = 30
+static_dir = "./frontend/dist"   # dist del frontend WASM (se sirve en /)
 
 [database]
 url = { env = "YSH_DATABASE_URL", default = "sqlite://ysh.db" }
@@ -246,9 +247,19 @@ analytics_retention_days = 30
 quality_retention_days = 7
 
 # ═══════════════════════════════════════════
-# ANALYTICS (FASE 15)
+# FASE 15: ANALYTICS
 # ═══════════════════════════════════════════
 [analytics]
 enabled = true
 default_range_days = 30
 snapshot_retention_days = 90
+
+# ═══════════════════════════════════════════
+# FASE 16: OBSERVABILITY (metrics + logging)
+# ═══════════════════════════════════════════
+# El formato de log se controla con YSH_LOG_JSON=1; la verbosidad con RUST_LOG.
+[observability]
+metrics_enabled = true          # expone /metrics en formato Prometheus
+metrics_host = "0.0.0.0"        # bind del endpoint de métricas (127.0.0.1 si el
+metrics_port = 9091             # scraper corre en la misma máquina)
+snapshot_interval_secs = 15

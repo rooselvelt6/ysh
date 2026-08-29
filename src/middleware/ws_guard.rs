@@ -1,8 +1,8 @@
 use crate::config::settings::DdosWs;
 use crate::middleware::ip_blocklist::IpBlocklist;
 use dashmap::DashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Instant;
 
 pub struct WsGuard {
@@ -28,7 +28,8 @@ impl WsGuard {
 
     #[allow(dead_code)]
     pub fn can_connect(&self, user_id: i64) -> bool {
-        let entry = self.connections_per_user
+        let entry = self
+            .connections_per_user
             .entry(user_id)
             .or_insert_with(|| AtomicU32::new(0));
         let count = entry.load(Ordering::Relaxed);
@@ -37,7 +38,8 @@ impl WsGuard {
 
     #[allow(dead_code)]
     pub fn on_connect(&self, user_id: i64) {
-        let entry = self.connections_per_user
+        let entry = self
+            .connections_per_user
             .entry(user_id)
             .or_insert_with(|| AtomicU32::new(0));
         entry.fetch_add(1, Ordering::Relaxed);
@@ -59,7 +61,8 @@ impl WsGuard {
         let key = format!("ws:{}", user_id);
 
         {
-            let entry = self.message_counts
+            let entry = self
+                .message_counts
                 .entry(key.clone())
                 .or_insert_with(|| (AtomicU32::new(0), Instant::now()));
 
@@ -67,7 +70,9 @@ impl WsGuard {
             if start.elapsed().as_secs() >= 1 {
                 count.store(1, Ordering::Relaxed);
                 drop(entry);
-                let _ = self.message_counts.insert(key, (AtomicU32::new(1), Instant::now()));
+                let _ = self
+                    .message_counts
+                    .insert(key, (AtomicU32::new(1), Instant::now()));
                 return true;
             }
 

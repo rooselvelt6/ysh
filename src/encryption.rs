@@ -1,4 +1,4 @@
-use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+use aes_gcm::{Aes256Gcm, KeyInit, Nonce, aead::Aead};
 use redb::StorageBackend;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -76,13 +76,13 @@ impl From<CryptoError> for std::io::Error {
 impl EncryptedBackend {
     pub fn open(path: impl AsRef<Path>, key: &[u8; KEY_SIZE]) -> Result<Self, CryptoError> {
         let path = path.as_ref().to_path_buf();
-        let cipher =
-            Aes256Gcm::new_from_slice(key).map_err(|_| CryptoError::InvalidKey)?;
+        let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| CryptoError::InvalidKey)?;
 
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open(&path)?;
 
         let metadata = file.metadata()?;
@@ -165,10 +165,7 @@ impl EncryptedBackend {
         Ok(())
     }
 
-    fn decrypt_page(
-        inner: &mut Inner,
-        page_index: u64,
-    ) -> Result<[u8; PAGE_SIZE], std::io::Error> {
+    fn decrypt_page(inner: &mut Inner, page_index: u64) -> Result<[u8; PAGE_SIZE], std::io::Error> {
         let phys = Self::page_physical_offset(page_index);
         let file_len = inner.file.metadata()?.len();
         if phys + ENCRYPTED_PAGE as u64 > file_len {
@@ -243,8 +240,7 @@ impl StorageBackend for EncryptedBackend {
             } else {
                 Self::decrypt_page(&mut inner, page_idx)?
             };
-            page[offset_in_page..offset_in_page + needed]
-                .copy_from_slice(&data[pos..pos + needed]);
+            page[offset_in_page..offset_in_page + needed].copy_from_slice(&data[pos..pos + needed]);
             Self::encrypt_page(&mut inner, page_idx, &page)?;
             pos += needed;
         }
@@ -363,8 +359,7 @@ mod tests {
             .write(true)
             .open(tmp.path())
             .unwrap();
-        f.seek(SeekFrom::Start(HEADER_SIZE as u64 + 20))
-            .unwrap();
+        f.seek(SeekFrom::Start(HEADER_SIZE as u64 + 20)).unwrap();
         f.write_all(b"CORRUPTED").unwrap();
         drop(f);
         let backend2 = EncryptedBackend::open(tmp.path(), &key).unwrap();

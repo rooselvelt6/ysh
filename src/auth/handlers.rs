@@ -1,4 +1,4 @@
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{Json, extract::State, http::StatusCode};
 use base64::Engine;
 use serde::Deserialize;
 
@@ -84,17 +84,14 @@ pub async fn login(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Invalid credentials".into()))?;
 
-    if let Some(ref locked_until) = user.locked_until {
-        if let Ok(lock_time) =
-            chrono::DateTime::parse_from_rfc3339(locked_until)
-        {
-            if chrono::Utc::now() < lock_time.with_timezone(&chrono::Utc) {
-                return Err((
-                    StatusCode::TOO_MANY_REQUESTS,
-                    "Account locked. Try again later.".into(),
-                ));
-            }
-        }
+    if let Some(ref locked_until) = user.locked_until
+        && let Ok(lock_time) = chrono::DateTime::parse_from_rfc3339(locked_until)
+        && chrono::Utc::now() < lock_time.with_timezone(&chrono::Utc)
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Account locked. Try again later.".into(),
+        ));
     }
 
     let valid = verify_password(&req.password, &user.password_hash)
@@ -103,8 +100,7 @@ pub async fn login(
     if !valid {
         let new_attempts = user.failed_login_attempts + 1;
         if new_attempts >= 5 {
-            let lock_until =
-                (chrono::Utc::now() + chrono::Duration::minutes(15)).to_rfc3339();
+            let lock_until = (chrono::Utc::now() + chrono::Duration::minutes(15)).to_rfc3339();
             state
                 .db
                 .lock_account(user.id, &lock_until)
@@ -242,7 +238,7 @@ pub async fn encrypt_message(
 
     Ok(Json(serde_json::json!({
         "ciphertext": base64::engine::general_purpose::STANDARD.encode(&ciphertext),
-        "nonce": base64::engine::general_purpose::STANDARD.encode(&nonce),
+        "nonce": base64::engine::general_purpose::STANDARD.encode(nonce),
         "algorithm": state.config.encryption.algorithm,
     })))
 }
@@ -323,7 +319,12 @@ pub async fn verify_2fa_login(
         temp_token,
         state.secure_jwt_secret.as_str().as_bytes(),
     )
-    .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid or expired temp token".into()))?;
+    .map_err(|_| {
+        (
+            StatusCode::UNAUTHORIZED,
+            "Invalid or expired temp token".into(),
+        )
+    })?;
 
     if claims.kind != "2fa_pending" {
         return Err((StatusCode::UNAUTHORIZED, "Invalid token type".into()));

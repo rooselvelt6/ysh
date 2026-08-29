@@ -1,4 +1,4 @@
-use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef};
+use ractor::{Actor, ActorProcessingErr, ActorRef, async_trait};
 
 use crate::db::Database;
 use std::sync::Arc;
@@ -43,12 +43,10 @@ impl Actor for DatabaseActor {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match msg {
-            DatabaseActorMsg::HealthCheck => {
-                match state.db.health_check() {
-                    Ok(()) => tracing::debug!("DB health check passed"),
-                    Err(e) => tracing::error!("DB health check failed: {}", e),
-                }
-            }
+            DatabaseActorMsg::HealthCheck => match state.db.health_check() {
+                Ok(()) => tracing::debug!("DB health check passed"),
+                Err(e) => tracing::error!("DB health check failed: {}", e),
+            },
             DatabaseActorMsg::QueryCount => {
                 state.queries_executed += 1;
                 match state.db.user_count() {

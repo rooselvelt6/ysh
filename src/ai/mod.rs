@@ -1,5 +1,5 @@
-pub mod anomaly;
 pub mod annealing;
+pub mod anomaly;
 pub mod fuzzy;
 pub mod genetic;
 pub mod matching;
@@ -55,14 +55,18 @@ impl AIEngine {
     }
 
     pub fn moderate_text(&self, req: ModerateRequest) -> Moderation {
-        self.metrics.moderation_checks.fetch_add(1, Ordering::Relaxed);
+        self.metrics
+            .moderation_checks
+            .fetch_add(1, Ordering::Relaxed);
         text::moderate_text(&self.cfg, req)
     }
 
     pub fn anomaly_score(&self, features: &[f64]) -> f64 {
         let score = anomaly::anomaly_score(&self.cfg, features);
         if score >= self.cfg.anomaly_flag_threshold {
-            self.metrics.anomalies_flagged.fetch_add(1, Ordering::Relaxed);
+            self.metrics
+                .anomalies_flagged
+                .fetch_add(1, Ordering::Relaxed);
         }
         score
     }
@@ -73,7 +77,9 @@ impl AIEngine {
     }
 
     pub fn neural_predict(&self, weights: &network::Weights, input: &[f64]) -> f64 {
-        self.metrics.neural_inferences.fetch_add(1, Ordering::Relaxed);
+        self.metrics
+            .neural_inferences
+            .fetch_add(1, Ordering::Relaxed);
         network::forward(&self.cfg, weights, input)
     }
 
@@ -82,7 +88,9 @@ impl AIEngine {
         fitness: impl Fn(&[f64]) -> f64 + Send + Sync,
         dims: usize,
     ) -> genetic::Individual {
-        self.metrics.genetic_generations.fetch_add(1, Ordering::Relaxed);
+        self.metrics
+            .genetic_generations
+            .fetch_add(1, Ordering::Relaxed);
         genetic::optimize(&self.cfg, fitness, dims)
     }
 

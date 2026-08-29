@@ -1,7 +1,7 @@
 //! Locale metadata and negotiation (Accept-Language resolution).
 
-use fluent_langneg::negotiate_languages;
 use fluent_langneg::NegotiationStrategy;
+use fluent_langneg::negotiate_languages;
 use unic_langid::LanguageIdentifier;
 
 /// Human-readable metadata for a supported locale.
@@ -88,8 +88,10 @@ pub fn negotiate(accept_language: &str, default: &str) -> String {
         })
         .collect();
 
-    let available: Vec<LanguageIdentifier> =
-        crate::i18n::catalog::SUPPORTED.iter().filter_map(|c| c.parse().ok()).collect();
+    let available: Vec<LanguageIdentifier> = crate::i18n::catalog::SUPPORTED
+        .iter()
+        .filter_map(|c| c.parse().ok())
+        .collect();
     let default_id: LanguageIdentifier = default.parse().unwrap_or_else(|_| "en".parse().unwrap());
 
     let negotiated = negotiate_languages(
@@ -109,7 +111,11 @@ pub fn negotiate(accept_language: &str, default: &str) -> String {
 /// Returns RTL metadata for a normalized locale code.
 #[allow(dead_code)]
 pub fn is_rtl(locale: &str) -> bool {
-    supported_meta().iter().find(|m| m.code == locale).map(|m| m.rtl).unwrap_or(false)
+    supported_meta()
+        .iter()
+        .find(|m| m.code == locale)
+        .map(|m| m.rtl)
+        .unwrap_or(false)
 }
 
 /// Returns the full metadata for a normalized locale code.

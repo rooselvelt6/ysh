@@ -29,10 +29,7 @@ pub struct FuzzySet {
 impl FuzzySet {
     #[allow(dead_code)]
     pub fn fuzzify(&self, x: f64) -> Vec<(&'static str, f64)> {
-        self.labels
-            .iter()
-            .map(|m| (m.name, m.mf(x)))
-            .collect()
+        self.labels.iter().map(|m| (m.name, m.mf(x))).collect()
     }
 
     pub fn degree(&self, x: f64, name: &'static str) -> f64 {
@@ -75,11 +72,7 @@ pub fn defuzzify(pairs: &[(f64, f64)]) -> f64 {
         num += center * degree;
         den += degree;
     }
-    if den == 0.0 {
-        0.0
-    } else {
-        num / den
-    }
+    if den == 0.0 { 0.0 } else { num / den }
 }
 
 #[cfg(test)]

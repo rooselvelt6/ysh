@@ -1,4 +1,4 @@
-use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef};
+use ractor::{Actor, ActorProcessingErr, ActorRef, async_trait};
 
 pub struct CryptoActor;
 
@@ -29,20 +29,20 @@ impl Actor for CryptoActor {
 
         let cipher = match algorithm.as_str() {
             "aes-256-gcm" => {
-                let aes = AesCipher::new(&key)
-                    .map_err(|e| ActorProcessingErr::from(e.to_string()))?;
+                let aes =
+                    AesCipher::new(&key).map_err(|e| ActorProcessingErr::from(e.to_string()))?;
                 Cipher::Aes(aes)
             }
             "chacha20-poly1305" => {
-                let chacha = ChaChaCipher::new(&key)
-                    .map_err(|e| ActorProcessingErr::from(e.to_string()))?;
+                let chacha =
+                    ChaChaCipher::new(&key).map_err(|e| ActorProcessingErr::from(e.to_string()))?;
                 Cipher::ChaCha(chacha)
             }
             other => {
                 return Err(ActorProcessingErr::from(format!(
                     "Unknown algorithm: {}",
                     other
-                )))
+                )));
             }
         };
 
@@ -105,10 +105,7 @@ impl Actor for CryptoActor {
             }
             CryptoActorMsg::RotateKeys => {
                 let algo_hash = crate::security::password::hash_blake3(state.algorithm.as_bytes());
-                tracing::info!(
-                    "Rotating encryption keys (algo fingerprint: {})",
-                    algo_hash
-                );
+                tracing::info!("Rotating encryption keys (algo fingerprint: {})", algo_hash);
             }
         }
         Ok(())
@@ -116,13 +113,7 @@ impl Actor for CryptoActor {
 }
 
 pub enum CryptoActorMsg {
-    Encrypt {
-        plaintext: Vec<u8>,
-        aad: Vec<u8>,
-    },
-    Decrypt {
-        ciphertext: Vec<u8>,
-        aad: Vec<u8>,
-    },
+    Encrypt { plaintext: Vec<u8>, aad: Vec<u8> },
+    Decrypt { ciphertext: Vec<u8>, aad: Vec<u8> },
     RotateKeys,
 }

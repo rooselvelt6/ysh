@@ -1,4 +1,4 @@
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{Json, extract::State, http::StatusCode};
 
 use crate::auth::jwt::AuthUser;
 use crate::server::AppState;
@@ -7,9 +7,10 @@ pub async fn get_balance(
     auth: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     state
         .db
@@ -35,9 +36,10 @@ pub async fn deposit(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let amount = req["amount"]
         .as_i64()
@@ -64,7 +66,9 @@ pub async fn deposit(
         .deposit(user_id, amount, description)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let _ = state.db.create_receipt(user_id, "deposit", 0, amount, "YSH", description, "{}");
+    let _ = state
+        .db
+        .create_receipt(user_id, "deposit", 0, amount, "YSH", description, "{}");
 
     Ok(Json(serde_json::json!({
         "balance": balance,
@@ -77,9 +81,10 @@ pub async fn withdraw(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let amount = req["amount"]
         .as_i64()
@@ -94,7 +99,9 @@ pub async fn withdraw(
         return Err((StatusCode::FORBIDDEN, "Wallet is frozen".into()));
     }
 
-    let (ok, msg) = state.db.check_spending_limit(user_id, amount)
+    let (ok, msg) = state
+        .db
+        .check_spending_limit(user_id, amount)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if !ok {
         return Err((StatusCode::FORBIDDEN, msg));
@@ -107,7 +114,9 @@ pub async fn withdraw(
         .withdraw(user_id, amount, description)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
-    let _ = state.db.create_receipt(user_id, "withdraw", 0, amount, "YSH", description, "{}");
+    let _ = state
+        .db
+        .create_receipt(user_id, "withdraw", 0, amount, "YSH", description, "{}");
 
     Ok(Json(serde_json::json!({
         "balance": balance,
@@ -120,9 +129,10 @@ pub async fn transfer(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let from_user: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let from_user: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let to_user = req["to_user_id"]
         .as_i64()
@@ -145,7 +155,9 @@ pub async fn transfer(
         return Err((StatusCode::FORBIDDEN, "Wallet is frozen".into()));
     }
 
-    let (ok, msg) = state.db.check_spending_limit(from_user, amount)
+    let (ok, msg) = state
+        .db
+        .check_spending_limit(from_user, amount)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if !ok {
         return Err((StatusCode::FORBIDDEN, msg));
@@ -158,7 +170,15 @@ pub async fn transfer(
         .transfer(from_user, to_user, amount, description)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
-    let _ = state.db.create_receipt(from_user, "transfer_out", 0, amount, "YSH", description, "{}");
+    let _ = state.db.create_receipt(
+        from_user,
+        "transfer_out",
+        0,
+        amount,
+        "YSH",
+        description,
+        "{}",
+    );
 
     Ok(Json(serde_json::json!({
         "message": "Transfer completed",
@@ -171,9 +191,10 @@ pub async fn get_transactions(
     auth: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let transactions = state
         .db
@@ -190,11 +211,14 @@ pub async fn get_spending_limits(
     auth: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
-    let limits = state.db.get_spending_limits(user_id)
+    let limits = state
+        .db
+        .get_spending_limits(user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(limits))
@@ -205,9 +229,10 @@ pub async fn set_spending_limit(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let daily = req["daily_limit"].as_i64().unwrap_or(100000);
     let monthly = req["monthly_limit"].as_i64().unwrap_or(1000000);
@@ -216,7 +241,9 @@ pub async fn set_spending_limit(
         return Err((StatusCode::BAD_REQUEST, "Limits must be positive".into()));
     }
 
-    state.db.set_spending_limit(user_id, daily, monthly)
+    state
+        .db
+        .set_spending_limit(user_id, daily, monthly)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(serde_json::json!({
@@ -230,11 +257,14 @@ pub async fn freeze_wallet(
     State(state): State<AppState>,
     axum::extract::Path(target_user_id): axum::extract::Path<i64>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
-    let user = state.db.find_user_by_id(user_id)
+    let user = state
+        .db
+        .find_user_by_id(user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "User not found".into()))?;
 
@@ -242,12 +272,18 @@ pub async fn freeze_wallet(
         return Err((StatusCode::FORBIDDEN, "Admin only".into()));
     }
 
-    state.db.freeze_wallet(target_user_id)
+    state
+        .db
+        .freeze_wallet(target_user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let _ = state.db.create_fraud_alert(
-        Some(target_user_id), "wallet_frozen", "high",
-        &format!("Wallet frozen by admin #{}", user_id), "{}", None,
+        Some(target_user_id),
+        "wallet_frozen",
+        "high",
+        &format!("Wallet frozen by admin #{}", user_id),
+        "{}",
+        None,
     );
 
     Ok(Json(serde_json::json!({
@@ -261,11 +297,14 @@ pub async fn unfreeze_wallet(
     State(state): State<AppState>,
     axum::extract::Path(target_user_id): axum::extract::Path<i64>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
-    let user = state.db.find_user_by_id(user_id)
+    let user = state
+        .db
+        .find_user_by_id(user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "User not found".into()))?;
 
@@ -273,7 +312,9 @@ pub async fn unfreeze_wallet(
         return Err((StatusCode::FORBIDDEN, "Admin only".into()));
     }
 
-    state.db.unfreeze_wallet(target_user_id)
+    state
+        .db
+        .unfreeze_wallet(target_user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(serde_json::json!({
@@ -281,4 +322,3 @@ pub async fn unfreeze_wallet(
         "frozen": false,
     })))
 }
-

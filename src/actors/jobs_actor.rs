@@ -1,4 +1,4 @@
-use ractor::{async_trait, Actor, ActorProcessingErr, ActorRef};
+use ractor::{Actor, ActorProcessingErr, ActorRef, async_trait};
 use std::sync::Arc;
 
 use crate::config::settings::JobsConfig;
@@ -132,7 +132,8 @@ impl JobsActorState {
             entry["runs"] = serde_json::Value::from(prev["runs"].as_i64().unwrap_or(0) + 1);
         }
         self.runs.insert(name.to_string(), entry);
-        self.last_run_at.insert(name.to_string(), chrono::Utc::now().to_rfc3339());
+        self.last_run_at
+            .insert(name.to_string(), chrono::Utc::now().to_rfc3339());
     }
 }
 
@@ -144,5 +145,7 @@ pub enum JobsActorMsg {
     RunNotifications,
     RunAnalyticsSnapshot,
     RunAll,
-    GetStats { reply_to: tokio::sync::oneshot::Sender<serde_json::Value> },
+    GetStats {
+        reply_to: tokio::sync::oneshot::Sender<serde_json::Value>,
+    },
 }

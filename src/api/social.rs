@@ -1,14 +1,16 @@
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
-    Json,
 };
 
 use crate::auth::jwt::AuthUser;
 use crate::server::AppState;
 
 fn parse_uid(auth: &AuthUser) -> Result<i64, (StatusCode, String)> {
-    auth.user_id.parse().map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))
+    auth.user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))
 }
 
 // ═══════════════════════════════════════════
@@ -30,7 +32,9 @@ pub async fn block_user(
         .block_user(user_id, target)
         .map_err(|e| http_err(&e))?;
 
-    Ok(Json(serde_json::json!({ "message": "User blocked", "blocked_user_id": target })))
+    Ok(Json(
+        serde_json::json!({ "message": "User blocked", "blocked_user_id": target }),
+    ))
 }
 
 pub async fn unblock_user(
@@ -81,7 +85,9 @@ pub async fn get_blocked_users(
         })
         .collect();
 
-    Ok(Json(serde_json::json!({ "blocked": usernames, "count": usernames.len() })))
+    Ok(Json(
+        serde_json::json!({ "blocked": usernames, "count": usernames.len() }),
+    ))
 }
 
 // ═══════════════════════════════════════════
@@ -101,10 +107,7 @@ pub async fn create_report(
     let target_id: i64 = req["target_id"]
         .as_i64()
         .ok_or((StatusCode::BAD_REQUEST, "target_id required".into()))?;
-    let category = req["category"]
-        .as_str()
-        .unwrap_or("other")
-        .to_string();
+    let category = req["category"].as_str().unwrap_or("other").to_string();
     let description = req["description"].as_str().unwrap_or("").to_string();
 
     let valid_types = ["user", "moment", "message", "host", "agency"];
@@ -171,8 +174,13 @@ pub async fn get_my_badges(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let user_id = parse_uid(&auth)?;
 
-    let badges = state.db.get_user_badges(user_id).map_err(|e| http_err(&e))?;
-    Ok(Json(serde_json::json!({ "badges": badges, "count": badges.len() })))
+    let badges = state
+        .db
+        .get_user_badges(user_id)
+        .map_err(|e| http_err(&e))?;
+    Ok(Json(
+        serde_json::json!({ "badges": badges, "count": badges.len() }),
+    ))
 }
 
 pub async fn get_user_badges(
@@ -184,7 +192,9 @@ pub async fn get_user_badges(
         .get_user_badges(user_id)
         .map_err(|e| http_err(&e))?;
 
-    Ok(Json(serde_json::json!({ "user_id": user_id, "badges": badges, "count": badges.len() })))
+    Ok(Json(
+        serde_json::json!({ "user_id": user_id, "badges": badges, "count": badges.len() }),
+    ))
 }
 
 // ═══════════════════════════════════════════
@@ -220,10 +230,7 @@ pub async fn get_user_reputation(
     State(state): State<AppState>,
     Path(user_id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let reputation = state
-        .db
-        .get_reputation(user_id)
-        .map_err(|e| http_err(&e))?;
+    let reputation = state.db.get_reputation(user_id).map_err(|e| http_err(&e))?;
 
     Ok(Json(serde_json::json!({
         "user_id": reputation.user_id,
@@ -249,10 +256,7 @@ pub async fn flag_content(
     let target_id: i64 = req["target_id"]
         .as_i64()
         .ok_or((StatusCode::BAD_REQUEST, "target_id required".into()))?;
-    let flag_type = req["flag_type"]
-        .as_str()
-        .unwrap_or("other")
-        .to_string();
+    let flag_type = req["flag_type"].as_str().unwrap_or("other").to_string();
     let description = req["description"].as_str().unwrap_or("").to_string();
 
     let valid_types = ["moment", "message", "user", "host"];
@@ -262,7 +266,14 @@ pub async fn flag_content(
 
     let flag_id = state
         .db
-        .flag_content(&flag_type, "manual", target_type, target_id, 0.5, &description)
+        .flag_content(
+            &flag_type,
+            "manual",
+            target_type,
+            target_id,
+            0.5,
+            &description,
+        )
         .map_err(|e| http_err(&e))?;
 
     Ok(Json(serde_json::json!({
@@ -337,7 +348,9 @@ pub async fn get_my_appeals(
         .get_user_appeals(user_id)
         .map_err(|e| http_err(&e))?;
 
-    Ok(Json(serde_json::json!({ "appeals": appeals, "count": appeals.len() })))
+    Ok(Json(
+        serde_json::json!({ "appeals": appeals, "count": appeals.len() }),
+    ))
 }
 
 fn http_err(e: &anyhow::Error) -> (StatusCode, String) {

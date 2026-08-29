@@ -39,21 +39,20 @@ pub async fn ddos_middleware(
 }
 
 pub fn extract_client_ip(request: &Request<Body>) -> String {
-    if let Some(forwarded) = request.headers().get("x-forwarded-for") {
-        if let Ok(s) = forwarded.to_str() {
-            if let Some(first) = s.split(',').next() {
-                let trimmed = first.trim();
-                if !trimmed.is_empty() {
-                    return trimmed.to_string();
-                }
-            }
+    if let Some(forwarded) = request.headers().get("x-forwarded-for")
+        && let Ok(s) = forwarded.to_str()
+        && let Some(first) = s.split(',').next()
+    {
+        let trimmed = first.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
         }
     }
 
-    if let Some(real_ip) = request.headers().get("x-real-ip") {
-        if let Ok(s) = real_ip.to_str() {
-            return s.trim().to_string();
-        }
+    if let Some(real_ip) = request.headers().get("x-real-ip")
+        && let Ok(s) = real_ip.to_str()
+    {
+        return s.trim().to_string();
     }
 
     "unknown".to_string()

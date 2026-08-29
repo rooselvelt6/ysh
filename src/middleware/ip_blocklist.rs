@@ -1,6 +1,6 @@
 use dashmap::DashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 struct BlockEntry {
@@ -42,7 +42,8 @@ impl IpBlocklist {
 
     pub fn record_error(&self, ip: &str) -> bool {
         let should_block = {
-            let entry = self.error_counts
+            let entry = self
+                .error_counts
                 .entry(ip.to_string())
                 .or_insert_with(|| (AtomicU64::new(0), Instant::now()));
 
@@ -52,7 +53,8 @@ impl IpBlocklist {
 
             if expired {
                 drop(entry);
-                self.error_counts.insert(ip.to_string(), (AtomicU64::new(1), Instant::now()));
+                self.error_counts
+                    .insert(ip.to_string(), (AtomicU64::new(1), Instant::now()));
                 return false;
             }
 
@@ -64,11 +66,18 @@ impl IpBlocklist {
         if should_block {
             self.error_counts.remove(ip);
             if self.blocked.len() < self.max_size {
-                self.blocked.insert(ip.to_string(), BlockEntry {
-                    blocked_at: Instant::now(),
-                    duration: self.block_duration,
-                });
-                tracing::warn!("Auto-blocked IP {} for {}s", ip, self.block_duration.as_secs());
+                self.blocked.insert(
+                    ip.to_string(),
+                    BlockEntry {
+                        blocked_at: Instant::now(),
+                        duration: self.block_duration,
+                    },
+                );
+                tracing::warn!(
+                    "Auto-blocked IP {} for {}s",
+                    ip,
+                    self.block_duration.as_secs()
+                );
             }
             return true;
         }
@@ -78,10 +87,13 @@ impl IpBlocklist {
     #[allow(dead_code)]
     pub fn block_ip(&self, ip: &str, duration: Duration) {
         if self.blocked.len() < self.max_size {
-            self.blocked.insert(ip.to_string(), BlockEntry {
-                blocked_at: Instant::now(),
-                duration,
-            });
+            self.blocked.insert(
+                ip.to_string(),
+                BlockEntry {
+                    blocked_at: Instant::now(),
+                    duration,
+                },
+            );
             tracing::info!("Manually blocked IP {} for {}s", ip, duration.as_secs());
         }
     }
@@ -97,7 +109,8 @@ impl IpBlocklist {
 
     #[allow(dead_code)]
     pub fn cleanup_expired(&self) {
-        self.blocked.retain(|_, entry| entry.blocked_at.elapsed() < entry.duration);
+        self.blocked
+            .retain(|_, entry| entry.blocked_at.elapsed() < entry.duration);
         self.error_counts.retain(|_, (count, first_seen)| {
             first_seen.elapsed() < self.window && count.load(Ordering::Relaxed) > 0
         });

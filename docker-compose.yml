@@ -1,0 +1,85 @@
+# ═══════════════════════════════════════════
+# YSH — docker-compose (dev / staging / prod)
+# FASE 16: Deploy + Monitoring
+# ═══════════════════════════════════════════
+# Uso:
+#   docker compose up -d                # por defecto = dev
+#   docker compose --profile staging up -d
+#   docker compose --profile monitoring up -d   # + Prometheus + Grafana
+#
+# Requiere: .env con (al menos) YSH_JWT_SECRET, YSH_DB_PASSWORD, YSH_ENCRYPTION_KEY
+#   cp .env.example .env && vim .env
+# ═══════════════════════════════════════════
+
+services:
+
+  # ── API (ysh) ─────────────────────────────
+  ysh:
+    build: .
+    image: ysh:latest
+    restart: unless-stopped
+    profiles: [dev, staging, prod, monitoring]
+    environment: &ysh_env
+      # secrets vienen del .env — NUNCA commitear
+      YSH_JWT_SECRET: ${YSH_JWT_SECRET:?set en .env}
+      YSH_DB_PASSWORD: ${YSH_DB_PASSWORD:?set en .env}
+      YSH_ENCRYPTION_KEY: ${YSH_ENCRYPTION_KEY:?set en .env}
+      # base de datos en volumen persistente
+      YSH_DATABASE_URL: sqlite:///data/ysh.db
+      # observabilidad
+      YSH_LOG_JSON: "1"
+      # cargo/worker sizing
+      RUST_LOG: ${RUST_LOG:-info}
+    env_file: .env
+    volumes:
+      - ysh-data:/data
+    ports:
+      - "8080:8080"     # API + frontend estático
+      - "9091:9091"     # Prometheus /metrics
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-sS", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  # ── Prometheus (monitoring) ───────────────
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    profiles: [monitoring]
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d'
+    ports:
+      - "9090:9090"
+
+  # ── Grafana (monitoring) ──────────────────
+  grafana:
+    image: grafana/grafana-oss:latest
+    restart: unless-stopped
+    profiles: [monitoring]
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
+      - grafana-data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  ysh-data:
+  prometheus-data:
+  grafana-data:

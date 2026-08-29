@@ -285,6 +285,12 @@ pub struct CallState {
     pub started_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+impl Default for ConnectionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConnectionManager {
     pub fn new() -> Self {
         let (broadcast, _) = broadcast::channel(1024);
@@ -304,7 +310,9 @@ impl ConnectionManager {
     pub fn remove(&mut self, user_id: i64) {
         self.connections.remove(&user_id);
         self.online_users.remove(&user_id);
-        let _ = self.broadcast.send(serde_json::to_string(&ServerMessage::UserOffline { user_id }).unwrap());
+        let _ = self
+            .broadcast
+            .send(serde_json::to_string(&ServerMessage::UserOffline { user_id }).unwrap());
     }
 
     #[allow(dead_code)]
@@ -313,10 +321,10 @@ impl ConnectionManager {
     }
 
     pub fn send_to(&self, user_id: i64, msg: &ServerMessage) {
-        if let Some(sender) = self.connections.get(&user_id) {
-            if let Ok(json) = serde_json::to_string(msg) {
-                let _ = sender.send(json);
-            }
+        if let Some(sender) = self.connections.get(&user_id)
+            && let Ok(json) = serde_json::to_string(msg)
+        {
+            let _ = sender.send(json);
         }
     }
 
@@ -350,24 +358,27 @@ impl ConnectionManager {
         if let Some(s) = self.online_users.get_mut(&user_id) {
             *s = status.clone();
         }
-        self.broadcast(&ServerMessage::PresenceUpdate {
-            user_id,
-            status,
-        });
+        self.broadcast(&ServerMessage::PresenceUpdate { user_id, status });
     }
 
     pub fn create_call(&mut self, caller_id: i64, callee_id: i64, call_type: String) -> String {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
         let call_id = format!("call_{}_{}", ts, caller_id);
-        self.active_calls.insert(call_id.clone(), CallState {
-            call_id: call_id.clone(),
-            caller_id,
-            callee_id,
-            call_type,
-            status: "ringing".into(),
-            started_at: None,
-        });
+        self.active_calls.insert(
+            call_id.clone(),
+            CallState {
+                call_id: call_id.clone(),
+                caller_id,
+                callee_id,
+                call_type,
+                status: "ringing".into(),
+                started_at: None,
+            },
+        );
         call_id
     }
 
@@ -437,9 +448,9 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
     {
         let mut mgr = state.ws_connections.lock().await;
         mgr.add(user_id, tx.clone(), "online".into());
-        let _ = mgr.broadcast.send(
-            serde_json::to_string(&ServerMessage::UserOnline { user_id }).unwrap(),
-        );
+        let _ = mgr
+            .broadcast
+            .send(serde_json::to_string(&ServerMessage::UserOnline { user_id }).unwrap());
     }
 
     let read_receipts = state.read_receipts.clone();
@@ -466,7 +477,9 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                     let client_msg: ClientMessage = match serde_json::from_str(text_str) {
                         Ok(m) => m,
                         Err(_) => {
-                            let err = ServerMessage::Error { message: "Invalid message format".into() };
+                            let err = ServerMessage::Error {
+                                message: "Invalid message format".into(),
+                            };
                             if let Ok(json) = serde_json::to_string(&err) {
                                 let _ = tx.send(json);
                             }
@@ -475,12 +488,20 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                     };
 
                     match client_msg {
-                        ClientMessage::ChatMessage { session_id, content, encrypted } => {
-                            let msg_id = match db.send_message(session_id, user_id, &content, "text", encrypted) {
+                        ClientMessage::ChatMessage {
+                            session_id,
+                            content,
+                            encrypted,
+                        } => {
+                            let msg_id = match db
+                                .send_message(session_id, user_id, &content, "text", encrypted)
+                            {
                                 Ok(id) => id,
                                 Err(e) => {
                                     tracing::error!("Failed to save message: {}", e);
-                                    let err = ServerMessage::Error { message: e.to_string() };
+                                    let err = ServerMessage::Error {
+                                        message: e.to_string(),
+                                    };
                                     if let Ok(json) = serde_json::to_string(&err) {
                                         let _ = tx.send(json);
                                     }
@@ -493,7 +514,8 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                                 Err(_) => continue,
                             };
 
-                            let created_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+                            let created_at =
+                                chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
                             let server_msg = ServerMessage::ChatMessage {
                                 session_id,
                                 message_id: msg_id,
@@ -510,7 +532,11 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                                 }
                             }
                         }
-                        ClientMessage::ChatHistory { session_id, limit, before_id } => {
+                        ClientMessage::ChatHistory {
+                            session_id,
+                            limit,
+                            before_id,
+                        } => {
                             let lim = limit.unwrap_or(50);
                             match db.get_messages(session_id, lim, before_id) {
                                 Ok(messages) => {
@@ -522,14 +548,19 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                                     mgr.send_to(user_id, &server_msg);
                                 }
                                 Err(e) => {
-                                    let err = ServerMessage::Error { message: e.to_string() };
+                                    let err = ServerMessage::Error {
+                                        message: e.to_string(),
+                                    };
                                     if let Ok(json) = serde_json::to_string(&err) {
                                         let _ = tx.send(json);
                                     }
                                 }
                             }
                         }
-                        ClientMessage::Typing { session_id, is_typing } => {
+                        ClientMessage::Typing {
+                            session_id,
+                            is_typing,
+                        } => {
                             let participants = match db.get_session_participants(session_id) {
                                 Ok(p) => p,
                                 Err(_) => continue,
@@ -541,14 +572,17 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                             };
                             let mgr = ws_connections_clone.lock().await;
                             for p in &participants {
-                                if let Some(uid) = p["user_id"].as_i64() {
-                                    if uid != user_id {
-                                        mgr.send_to(uid, &typing_msg);
-                                    }
+                                if let Some(uid) = p["user_id"].as_i64()
+                                    && uid != user_id
+                                {
+                                    mgr.send_to(uid, &typing_msg);
                                 }
                             }
                         }
-                        ClientMessage::ReadReceipt { session_id, message_id } => {
+                        ClientMessage::ReadReceipt {
+                            session_id,
+                            message_id,
+                        } => {
                             let _ = db.mark_messages_read(session_id, user_id);
                             let participants = match db.get_session_participants(session_id) {
                                 Ok(p) => p,
@@ -565,10 +599,10 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                             };
                             let mgr = ws_connections_clone.lock().await;
                             for p in &participants {
-                                if let Some(uid) = p["user_id"].as_i64() {
-                                    if uid != user_id {
-                                        mgr.send_to(uid, &read_msg);
-                                    }
+                                if let Some(uid) = p["user_id"].as_i64()
+                                    && uid != user_id
+                                {
+                                    mgr.send_to(uid, &read_msg);
                                 }
                             }
                         }
@@ -595,11 +629,14 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                                     let uid = user_id;
                                     let m = mode.clone();
                                     tokio::spawn(async move {
-                                        match_attempt_loop(uid, &m, db2, ws2, match_tx2, timer).await;
+                                        match_attempt_loop(uid, &m, db2, ws2, match_tx2, timer)
+                                            .await;
                                     });
                                 }
                                 Err(e) => {
-                                    let err = ServerMessage::Error { message: e.to_string() };
+                                    let err = ServerMessage::Error {
+                                        message: e.to_string(),
+                                    };
                                     if let Ok(json) = serde_json::to_string(&err) {
                                         let _ = tx.send(json);
                                     }
@@ -614,7 +651,10 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                         ClientMessage::MatchTimerExtend => {
                             let timer = 30u64;
                             let mgr = ws_connections_clone.lock().await;
-                            mgr.send_to(user_id, &ServerMessage::MatchTimerTick { remaining: timer });
+                            mgr.send_to(
+                                user_id,
+                                &ServerMessage::MatchTimerTick { remaining: timer },
+                            );
                         }
                         ClientMessage::KnockKnockAccept { session_id } => {
                             let participants = match db.get_session_participants(session_id) {
@@ -632,40 +672,65 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                                 }
                             }
                         }
-                        ClientMessage::CallInvite { target_user_id, call_type } => {
+                        ClientMessage::CallInvite {
+                            target_user_id,
+                            call_type,
+                        } => {
                             let mut mgr = ws_connections_clone.lock().await;
                             if !mgr.is_online(target_user_id) {
                                 drop(mgr);
-                                let err = ServerMessage::Error { message: "User is offline".into() };
-                                if let Ok(json) = serde_json::to_string(&err) { let _ = tx.send(json); }
+                                let err = ServerMessage::Error {
+                                    message: "User is offline".into(),
+                                };
+                                if let Ok(json) = serde_json::to_string(&err) {
+                                    let _ = tx.send(json);
+                                }
                                 continue;
                             }
-                            let caller_username = db.find_user_by_id(user_id)
-                                .ok().flatten().map(|u| u.username).unwrap_or_else(|| "unknown".into());
-                            let call_id = mgr.create_call(user_id, target_user_id, call_type.clone());
-                            mgr.send_to(target_user_id, &ServerMessage::CallRinging {
-                                call_id: call_id.clone(),
-                                caller_id: user_id,
-                                caller_username,
-                                call_type,
-                            });
-                            mgr.send_to(user_id, &ServerMessage::CallInviting {
-                                from_user_id: target_user_id,
-                                from_username: "peer".into(),
-                                call_type: "video".into(),
-                            });
+                            let caller_username = db
+                                .find_user_by_id(user_id)
+                                .ok()
+                                .flatten()
+                                .map(|u| u.username)
+                                .unwrap_or_else(|| "unknown".into());
+                            let call_id =
+                                mgr.create_call(user_id, target_user_id, call_type.clone());
+                            mgr.send_to(
+                                target_user_id,
+                                &ServerMessage::CallRinging {
+                                    call_id: call_id.clone(),
+                                    caller_id: user_id,
+                                    caller_username,
+                                    call_type,
+                                },
+                            );
+                            mgr.send_to(
+                                user_id,
+                                &ServerMessage::CallInviting {
+                                    from_user_id: target_user_id,
+                                    from_username: "peer".into(),
+                                    call_type: "video".into(),
+                                },
+                            );
                         }
                         ClientMessage::CallAccept { caller_id } => {
                             let mut mgr = ws_connections_clone.lock().await;
                             if let Some(call_id) = mgr.find_call_by_users(user_id, caller_id) {
                                 mgr.accept_call(&call_id);
-                                let callee_username = db.find_user_by_id(user_id)
-                                    .ok().flatten().map(|u| u.username).unwrap_or_else(|| "unknown".into());
-                                mgr.send_to(caller_id, &ServerMessage::CallAccepted {
-                                    call_id: call_id.clone(),
-                                    peer_id: user_id,
-                                    peer_username: callee_username,
-                                });
+                                let callee_username = db
+                                    .find_user_by_id(user_id)
+                                    .ok()
+                                    .flatten()
+                                    .map(|u| u.username)
+                                    .unwrap_or_else(|| "unknown".into());
+                                mgr.send_to(
+                                    caller_id,
+                                    &ServerMessage::CallAccepted {
+                                        call_id: call_id.clone(),
+                                        peer_id: user_id,
+                                        peer_username: callee_username,
+                                    },
+                                );
                             }
                         }
                         ClientMessage::CallReject { caller_id } => {
@@ -673,40 +738,73 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                             if let Some(call_id) = mgr.find_call_by_users(user_id, caller_id) {
                                 mgr.end_call(&call_id);
                             }
-                            mgr.send_to(caller_id, &ServerMessage::CallRejected {
-                                reason: "Call rejected".into(),
-                            });
+                            mgr.send_to(
+                                caller_id,
+                                &ServerMessage::CallRejected {
+                                    reason: "Call rejected".into(),
+                                },
+                            );
                         }
                         ClientMessage::CallHangup { peer_id } => {
                             let mut mgr = ws_connections_clone.lock().await;
                             if let Some(call_id) = mgr.find_call_by_users(user_id, peer_id) {
                                 mgr.end_call(&call_id);
                             }
-                            mgr.send_to(peer_id, &ServerMessage::CallEnded {
-                                reason: "Call ended".into(),
-                            });
+                            mgr.send_to(
+                                peer_id,
+                                &ServerMessage::CallEnded {
+                                    reason: "Call ended".into(),
+                                },
+                            );
                         }
                         ClientMessage::Offer { peer_id, sdp } => {
                             let mgr = ws_connections_clone.lock().await;
-                            mgr.send_to(peer_id, &ServerMessage::Offer { from_user_id: user_id, sdp });
+                            mgr.send_to(
+                                peer_id,
+                                &ServerMessage::Offer {
+                                    from_user_id: user_id,
+                                    sdp,
+                                },
+                            );
                         }
                         ClientMessage::Answer { peer_id, sdp } => {
                             let mgr = ws_connections_clone.lock().await;
-                            mgr.send_to(peer_id, &ServerMessage::Answer { from_user_id: user_id, sdp });
+                            mgr.send_to(
+                                peer_id,
+                                &ServerMessage::Answer {
+                                    from_user_id: user_id,
+                                    sdp,
+                                },
+                            );
                         }
-                        ClientMessage::IceCandidate { peer_id, candidate, sdp_mid, sdp_m_line_index } => {
+                        ClientMessage::IceCandidate {
+                            peer_id,
+                            candidate,
+                            sdp_mid,
+                            sdp_m_line_index,
+                        } => {
                             let mgr = ws_connections_clone.lock().await;
-                            mgr.send_to(peer_id, &ServerMessage::IceCandidate {
-                                from_user_id: user_id, candidate, sdp_mid, sdp_m_line_index,
-                            });
+                            mgr.send_to(
+                                peer_id,
+                                &ServerMessage::IceCandidate {
+                                    from_user_id: user_id,
+                                    candidate,
+                                    sdp_mid,
+                                    sdp_m_line_index,
+                                },
+                            );
                         }
                         ClientMessage::CallRoomJoin { call_id } => {
                             let mut rooms = webrtc_rooms.lock().await;
                             let outcome = rooms.join(&call_id, user_id);
                             if !outcome.accepted {
                                 drop(rooms);
-                                let err = ServerMessage::Error { message: outcome.reason.unwrap_or_else(|| "Join failed".into()) };
-                                if let Ok(json) = serde_json::to_string(&err) { let _ = tx.send(json); }
+                                let err = ServerMessage::Error {
+                                    message: outcome.reason.unwrap_or_else(|| "Join failed".into()),
+                                };
+                                if let Ok(json) = serde_json::to_string(&err) {
+                                    let _ = tx.send(json);
+                                }
                                 continue;
                             }
                             drop(rooms);
@@ -716,11 +814,14 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                             if !recipients.contains(&user_id) {
                                 recipients.push(user_id);
                             }
-                            mgr.send_to_many(&recipients, &ServerMessage::CallRoomJoined {
-                                call_id: call_id.clone(),
-                                participants: outcome.participants,
-                                viewer_count: outcome.viewer_count,
-                            });
+                            mgr.send_to_many(
+                                &recipients,
+                                &ServerMessage::CallRoomJoined {
+                                    call_id: call_id.clone(),
+                                    participants: outcome.participants,
+                                    viewer_count: outcome.viewer_count,
+                                },
+                            );
                         }
                         ClientMessage::CallRoomLeave { call_id } => {
                             let mut rooms = webrtc_rooms.lock().await;
@@ -731,12 +832,15 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                             if let Some(outcome) = outcome {
                                 let recipients = outcome.participants.clone();
                                 let room_empty = outcome.room_empty;
-                                mgr.send_to_many(&recipients, &ServerMessage::CallRoomLeft {
-                                    call_id: call_id.clone(),
-                                    user_id,
-                                    participants: outcome.participants,
-                                    room_empty,
-                                });
+                                mgr.send_to_many(
+                                    &recipients,
+                                    &ServerMessage::CallRoomLeft {
+                                        call_id: call_id.clone(),
+                                        user_id,
+                                        participants: outcome.participants,
+                                        room_empty,
+                                    },
+                                );
                             }
                         }
                         ClientMessage::CallScreenShare { call_id, active } => {
@@ -747,36 +851,95 @@ pub async fn handle_ws(socket: WebSocket, query: WsAuthQuery, state: crate::serv
                             }
                             let room = rooms.get_room(&call_id).cloned();
                             drop(rooms);
-                            let _ = webrtc_actor.cast(crate::actors::webrtc_actor::WebRTCActorMsg::ScreenShare {
-                                call_id: call_id.clone(), user_id, active,
-                            });
+                            let _ = webrtc_actor.cast(
+                                crate::actors::webrtc_actor::WebRTCActorMsg::ScreenShare {
+                                    call_id: call_id.clone(),
+                                    user_id,
+                                    active,
+                                },
+                            );
                             if let Some(room) = room {
                                 let mut all = room.participants.clone();
                                 all.extend(room.viewers.iter().copied());
                                 let mgr = ws_connections_clone.lock().await;
-                                mgr.send_to_many(&all, &ServerMessage::CallScreenShareChanged {
-                                    call_id, user_id, active,
-                                });
+                                mgr.send_to_many(
+                                    &all,
+                                    &ServerMessage::CallScreenShareChanged {
+                                        call_id,
+                                        user_id,
+                                        active,
+                                    },
+                                );
                             }
                         }
-                        ClientMessage::CallQuality { call_id, bitrate_kbps, packet_loss_pct, rtt_ms, resolution, simulcast_tier } => {
-                            let _ = webrtc_actor.cast(crate::actors::webrtc_actor::WebRTCActorMsg::QualityReport {
-                                call_id, user_id, bitrate_kbps, packet_loss_pct, rtt_ms, resolution, simulcast_tier,
-                            });
+                        ClientMessage::CallQuality {
+                            call_id,
+                            bitrate_kbps,
+                            packet_loss_pct,
+                            rtt_ms,
+                            resolution,
+                            simulcast_tier,
+                        } => {
+                            let _ = webrtc_actor.cast(
+                                crate::actors::webrtc_actor::WebRTCActorMsg::QualityReport {
+                                    call_id,
+                                    user_id,
+                                    bitrate_kbps,
+                                    packet_loss_pct,
+                                    rtt_ms,
+                                    resolution,
+                                    simulcast_tier,
+                                },
+                            );
                         }
-                        ClientMessage::RoomOffer { call_id, target_user_id, sdp } => {
+                        ClientMessage::RoomOffer {
+                            call_id,
+                            target_user_id,
+                            sdp,
+                        } => {
                             let mgr = ws_connections_clone.lock().await;
-                            mgr.send_to(target_user_id, &ServerMessage::RoomOffer { call_id, from_user_id: user_id, sdp });
+                            mgr.send_to(
+                                target_user_id,
+                                &ServerMessage::RoomOffer {
+                                    call_id,
+                                    from_user_id: user_id,
+                                    sdp,
+                                },
+                            );
                         }
-                        ClientMessage::RoomAnswer { call_id, target_user_id, sdp } => {
+                        ClientMessage::RoomAnswer {
+                            call_id,
+                            target_user_id,
+                            sdp,
+                        } => {
                             let mgr = ws_connections_clone.lock().await;
-                            mgr.send_to(target_user_id, &ServerMessage::RoomAnswer { call_id, from_user_id: user_id, sdp });
+                            mgr.send_to(
+                                target_user_id,
+                                &ServerMessage::RoomAnswer {
+                                    call_id,
+                                    from_user_id: user_id,
+                                    sdp,
+                                },
+                            );
                         }
-                        ClientMessage::RoomIce { call_id, target_user_id, candidate, sdp_mid, sdp_m_line_index } => {
+                        ClientMessage::RoomIce {
+                            call_id,
+                            target_user_id,
+                            candidate,
+                            sdp_mid,
+                            sdp_m_line_index,
+                        } => {
                             let mgr = ws_connections_clone.lock().await;
-                            mgr.send_to(target_user_id, &ServerMessage::RoomIce {
-                                call_id, from_user_id: user_id, candidate, sdp_mid, sdp_m_line_index,
-                            });
+                            mgr.send_to(
+                                target_user_id,
+                                &ServerMessage::RoomIce {
+                                    call_id,
+                                    from_user_id: user_id,
+                                    candidate,
+                                    sdp_mid,
+                                    sdp_m_line_index,
+                                },
+                            );
                         }
                         ClientMessage::SetStatus { status } => {
                             let mut mgr = ws_connections_clone.lock().await;
@@ -821,9 +984,12 @@ async fn match_attempt_loop(
         if remaining == 0 {
             let _ = db.dequeue_match(user_id);
             let mgr = ws_connections.lock().await;
-            mgr.send_to(user_id, &ServerMessage::MatchDeclined {
-                reason: "Timer expired".into(),
-            });
+            mgr.send_to(
+                user_id,
+                &ServerMessage::MatchDeclined {
+                    reason: "Timer expired".into(),
+                },
+            );
             break;
         }
 
@@ -840,46 +1006,52 @@ async fn match_attempt_loop(
         if let Some(other_id) = matched_user {
             let session_id = match db.find_direct_session(user_id, other_id) {
                 Ok(Some(sid)) => sid,
-                Ok(None) => {
-                    match db.create_chat_session("direct", &[user_id, other_id]) {
-                        Ok(sid) => sid,
-                        Err(e) => {
-                            tracing::error!("Failed to create session: {}", e);
-                            break;
-                        }
+                Ok(None) => match db.create_chat_session("direct", &[user_id, other_id]) {
+                    Ok(sid) => sid,
+                    Err(e) => {
+                        tracing::error!("Failed to create session: {}", e);
+                        break;
                     }
-                }
+                },
                 Err(e) => {
                     tracing::error!("Failed to find session: {}", e);
                     break;
                 }
             };
 
-            let other_username = db.find_user_by_id(other_id)
+            let other_username = db
+                .find_user_by_id(other_id)
                 .ok()
                 .flatten()
                 .map(|u| u.username)
                 .unwrap_or_else(|| "unknown".into());
 
-            let my_username = db.find_user_by_id(user_id)
+            let my_username = db
+                .find_user_by_id(user_id)
                 .ok()
                 .flatten()
                 .map(|u| u.username)
                 .unwrap_or_else(|| "unknown".into());
 
             let mgr = ws_connections.lock().await;
-            mgr.send_to(user_id, &ServerMessage::MatchFound {
-                session_id,
-                user_id: other_id,
-                username: other_username.clone(),
-                mode: mode.to_string(),
-            });
-            mgr.send_to(other_id, &ServerMessage::MatchFound {
-                session_id,
+            mgr.send_to(
                 user_id,
-                username: my_username,
-                mode: mode.to_string(),
-            });
+                &ServerMessage::MatchFound {
+                    session_id,
+                    user_id: other_id,
+                    username: other_username.clone(),
+                    mode: mode.to_string(),
+                },
+            );
+            mgr.send_to(
+                other_id,
+                &ServerMessage::MatchFound {
+                    session_id,
+                    user_id,
+                    username: my_username,
+                    mode: mode.to_string(),
+                },
+            );
             break;
         }
 

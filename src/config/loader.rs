@@ -7,6 +7,12 @@ use super::settings::YshConfig;
 #[derive(Clone)]
 pub struct ConfigLoader;
 
+impl Default for ConfigLoader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConfigLoader {
     pub fn new() -> Self {
         Self
@@ -19,7 +25,8 @@ impl ConfigLoader {
         let raw: RawConfig = toml::from_str(&content)
             .with_context(|| format!("Failed to parse TOML config: {}", path))?;
 
-        let config = raw.resolve_env_vars()
+        let config = raw
+            .resolve_env_vars()
             .with_context(|| format!("Failed to resolve env vars in config: {}", path))?;
 
         tracing::info!("Config loaded from {}", path);
@@ -65,6 +72,8 @@ struct RawConfig {
     jobs: super::settings::JobsConfig,
     #[serde(default = "default_analytics")]
     analytics: super::settings::AnalyticsConfig,
+    #[serde(default)]
+    observability: super::settings::ObservabilityConfig,
 }
 
 fn default_jobs() -> super::settings::JobsConfig {
@@ -111,6 +120,12 @@ struct RawServerConfig {
     port: EnvValueU16,
     workers: usize,
     shutdown_timeout_secs: u32,
+    #[serde(default = "default_static_dir")]
+    static_dir: String,
+}
+
+fn default_static_dir() -> String {
+    "./frontend/dist".into()
 }
 
 #[derive(Deserialize)]
@@ -125,19 +140,21 @@ struct RawDatabaseConfig {
 #[serde(untagged)]
 enum EnvValue {
     Literal(String),
-    Reference { env: String, #[serde(default)] default: Option<String> },
+    Reference {
+        env: String,
+        #[serde(default)]
+        default: Option<String>,
+    },
 }
 
 impl EnvValue {
     fn resolve(self) -> Result<String> {
         match self {
             EnvValue::Literal(s) => Ok(s),
-            EnvValue::Reference { env: name, default } => {
-                match env::var(&name) {
-                    Ok(val) if !val.is_empty() => Ok(val),
-                    _ => default.ok_or_else(|| anyhow::anyhow!("Required env var {} not set", name)),
-                }
-            }
+            EnvValue::Reference { env: name, default } => match env::var(&name) {
+                Ok(val) if !val.is_empty() => Ok(val),
+                _ => default.ok_or_else(|| anyhow::anyhow!("Required env var {} not set", name)),
+            },
         }
     }
 }
@@ -146,19 +163,27 @@ impl EnvValue {
 #[serde(untagged)]
 enum EnvValueU16 {
     Literal(u16),
-    Reference { env: String, #[serde(default)] default: Option<u16>, #[serde(rename = "type")] _type: Option<String> },
+    Reference {
+        env: String,
+        #[serde(default)]
+        default: Option<u16>,
+        #[serde(rename = "type")]
+        _type: Option<String>,
+    },
 }
 
 impl EnvValueU16 {
     fn resolve(self) -> Result<u16> {
         match self {
             EnvValueU16::Literal(v) => Ok(v),
-            EnvValueU16::Reference { env: name, default, .. } => {
-                match env::var(&name) {
-                    Ok(val) if !val.is_empty() => val.parse().context(format!("Invalid u16 for {}", name)),
-                    _ => default.ok_or_else(|| anyhow::anyhow!("Required env var {} not set", name)),
+            EnvValueU16::Reference {
+                env: name, default, ..
+            } => match env::var(&name) {
+                Ok(val) if !val.is_empty() => {
+                    val.parse().context(format!("Invalid u16 for {}", name))
                 }
-            }
+                _ => default.ok_or_else(|| anyhow::anyhow!("Required env var {} not set", name)),
+            },
         }
     }
 }
@@ -167,16 +192,22 @@ impl EnvValueU16 {
 #[serde(untagged)]
 enum EnvValueOpt {
     Literal(String),
-    Reference { env: String, #[serde(default)] default: Option<String> },
+    Reference {
+        env: String,
+        #[serde(default)]
+        default: Option<String>,
+    },
 }
 
 impl EnvValueOpt {
     fn resolve(self) -> String {
         match self {
             EnvValueOpt::Literal(s) => s,
-            EnvValueOpt::Reference { env: name, default } => {
-                env::var(&name).ok().filter(|v| !v.is_empty()).or(default).unwrap_or_default()
-            }
+            EnvValueOpt::Reference { env: name, default } => env::var(&name)
+                .ok()
+                .filter(|v| !v.is_empty())
+                .or(default)
+                .unwrap_or_default(),
         }
     }
 }
@@ -203,6 +234,7 @@ impl RawConfig {
                 port: self.server.port.resolve()?,
                 workers: self.server.workers,
                 shutdown_timeout_secs: self.server.shutdown_timeout_secs,
+                static_dir: self.server.static_dir,
             },
             database: super::settings::DatabaseConfig {
                 url: self.database.url.resolve(),
@@ -224,6 +256,7 @@ impl RawConfig {
             webrtc: self.webrtc,
             jobs: self.jobs,
             analytics: self.analytics,
+            observability: self.observability,
         })
     }
 }

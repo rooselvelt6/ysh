@@ -1,4 +1,4 @@
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{Json, extract::State, http::StatusCode};
 
 use crate::auth::jwt::AuthUser;
 use crate::server::AppState;
@@ -33,9 +33,10 @@ pub async fn set_do_not_sell(
         .parse()
         .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid user ID".into()))?;
 
-    let value = req["do_not_sell"]
-        .as_bool()
-        .ok_or((StatusCode::BAD_REQUEST, "do_not_sell boolean required".into()))?;
+    let value = req["do_not_sell"].as_bool().ok_or((
+        StatusCode::BAD_REQUEST,
+        "do_not_sell boolean required".into(),
+    ))?;
 
     state
         .db

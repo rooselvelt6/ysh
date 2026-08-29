@@ -34,24 +34,24 @@
 >
 > Cada byte es *memory-safe*. Cada conexión está *cifrada*. Cada decisión se *audita*.
 >
-> **340 tests · 16 suites · 0 warnings · 0 errores.**
+> **341 tests · 16 suites · 0 warnings · 0 errores.**
 
 ---
 
-### 🗺️ Roadmap — 16 fases, 15 completadas
+### 🗺️ Roadmap — 16 fases, 16 completadas ✅
 
 <div align="center">
 
 | 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08 | 09 | 10 | 11 | 12 | 13 | 14 | 15 | 16 |
 |:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🔜 |
+| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 <table><tr>
-<td align="center" width="94%" bgcolor="#16181c"><div style="height:10px;border-radius:9999px;background:linear-gradient(90deg,#1d9bf0,#7856ff,#f91880);width:94%;"></div></td>
+<td align="center" width="100%" bgcolor="#16181c"><div style="height:10px;border-radius:9999px;background:linear-gradient(90deg,#1d9bf0,#7856ff,#f91880);width:100%;"></div></td>
 </tr></table>
 
-**~94% del producto completo.** Fundamentos, seguridad enterprise, WebRTC, economía cripto, IA pura en Rust,
-frontend WASM, social + moderación, jobs en background y analytics — todo probado en verde.
+**Producto completo.** Fundamentos, seguridad enterprise, WebRTC, economía cripto, IA pura en Rust,
+frontend WASM, social + moderación, jobs en background, analytics y **deploy/monitoring** — todo probado en verde.
 
 </div>
 
@@ -61,7 +61,7 @@ frontend WASM, social + moderación, jobs en background y analytics — todo pro
 | **11–13** | Frontend Leptos/WASM + PWA · i18n · Social + Moderación | ✅ |
 | **14** | Background Jobs + Testing (OWASP, proptest, load, mutation) | ✅ |
 | **15** | Analytics + Admin Dashboard | ✅ |
-| **16** | Deploy + Monitoring (Docker, CI/CD, Prometheus, backups) | 🔜 *siguiente* |
+| **16** | Deploy + Monitoring (Docker, CI/CD, Prometheus, backups) | ✅ |
 
 ---
 
@@ -88,7 +88,7 @@ frontend WASM, social + moderación, jobs en background y analytics — todo pro
 | **Endpoints de API** | **89+** (REST + WebSocket + WebRTC messaging) |
 | **Tablas redb** | **50** (10 `TableDefinition` + 40 `MultimapTableDefinition`) |
 | **Actores OTP (ractor)** | **10** — supervisor tree + session supervisor + 8 workers |
-| **Tests automatizados** | **340** en 16 suites |
+| **Tests automatizados** | **341** en 16 suites |
 | **Cobertura de tests** | Unidad · integración · carga · OWASP · proptest · serde roundtrip |
 | **Páginas frontend (Leptos)** | 17 |
 | **Idiomas** | 5 (incl. RTL árabe con plural rules) |
@@ -659,23 +659,19 @@ frontend WASM, social + moderación, jobs en background y analytics — todo pro
 - 11 endpoints `/admin/analytics/*` + `/profile/region/{region}`
 - 14 tests analytics — suite completa en verde (0 warnings, 0 errores)
 
-### FASE 16: Deploy + Monitoring
-- Dockerfile multi-stage (build + runtime optimizado)
-- docker-compose (dev + staging + prod)
-- CI/CD pipeline (GitHub Actions)
-  - Lint (clippy) → Check (0 warnings) → Test → Build → Deploy
-- SSL/TLS (Let's Encrypt + certbot auto-renewal)
-- Prometheus metrics + Grafana dashboards
-- Structured logging (JSON) + ELK stack
-- Security hardening:
-  - cargo-audit (dependency vulnerabilities)
-  - cargo-deny (license + supply chain)
-  - DDoS protection (ya implementado: per-IP rate limit, IP blocklist, circuit breaker, body limit, timeout)
-  - Firewall rules (iptables/nftables)
-- Backup strategy (redb snapshots + S3 offsite)
-- Horizontal scaling (load balancer + multiple instances)
-- Health monitoring + alerting (PagerDuty/Slack)
-- Runbook documentation
+### FASE 16: Deploy + Monitoring ✅
+- **Observability:** `/metrics` Prometheus en `9091` + logging JSON estructurado (`YSH_LOG_JSON=1`) y plain
+  - 10+ métricas: HTTP (rps por código), WS activos, uptime, tamaño BD, caché, IPs bloqueadas, circuit breaker, rate-limited, usuarios
+  - Fix crítico: `metrics` v0.22→0.24 para que los macros y el exporter compartan el mismo recorder
+- **Dockerfile** multi-stage (rust:1.85 → debian slim, usuario sin privilegios, volumen `/data`, healthcheck)
+- **docker-compose** (dev/staging/prod/monitoring) con Prometheus + Grafana
+- **Grafana** provisionado automáticamente (dashboard `YSH — Overview` en `deploy/grafana/`)
+- **CI/CD GitHub Actions** (`.github/workflows/ci.yml`): clippy (0 warns) → fmt → test (dev+release) → cargo-audit → build+push a GHCR
+- **SSL/TLS**: TLS 1.3 nativo (rustls) vía `YSH_TLS_CERT`/`YSH_TLS_KEY`; guía certbot + auto-renewal
+- **Server estático**: sirve `frontend/dist` en `/` con fallback SPA (fallback API-only si no existe)
+- **Backups**: snapshots en `[backup]` + volumen persistente; guía offsite S3
+- **Runbook** completo en `docs/deploy.md`
+- 2 tests nuevos de métricas — suite total **341** en verde (0 warnings, 0 errores)
 
 ---
 
@@ -697,8 +693,14 @@ curl -X POST http://localhost:8080/api/v1/register \
 
 # Verify
 cargo check          # 0 warnings, 0 errors
-cargo test           # 340 tests (16 suites) passing
+cargo test           # 341 tests (16 suites) passing
 cargo build          # Clean build
+
+# Métricas Prometheus
+curl http://localhost:9091/metrics
+
+# Despliegue (ver docs/deploy.md)
+docker compose --profile monitoring up -d --build
 ```
 
 ---

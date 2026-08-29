@@ -24,14 +24,38 @@ pub struct ModerateRequest {
 }
 
 const HARDCORE_BLOCKED: &[&str] = &[
-    "scam", "scammer", "fraud", "phishing", "money laundering", "carding",
-    "crack", "keygen", "warez", "cp ", "child porn", "underage", "minors",
-    "buy followers", "nudes for cash", "chargeback scam", "blackmail",
+    "scam",
+    "scammer",
+    "fraud",
+    "phishing",
+    "money laundering",
+    "carding",
+    "crack",
+    "keygen",
+    "warez",
+    "cp ",
+    "child porn",
+    "underage",
+    "minors",
+    "buy followers",
+    "nudes for cash",
+    "chargeback scam",
+    "blackmail",
 ];
 
 const FLAG_WORDS: &[&str] = &[
-    "sexually explicit", "nude", "leak", "pirate", "drugs", "weapons",
-    "violence", "harassment", "doxx", "spam", "adult site", "casino",
+    "sexually explicit",
+    "nude",
+    "leak",
+    "pirate",
+    "drugs",
+    "weapons",
+    "violence",
+    "harassment",
+    "doxx",
+    "spam",
+    "adult site",
+    "casino",
 ];
 
 fn has_term(content: &str, terms: &[&str]) -> Vec<String> {
@@ -57,8 +81,7 @@ pub fn moderate_text(cfg: &AiConfig, req: ModerateRequest) -> Moderation {
 
     let base = blocked.len() as f64 * 0.5 + flagged.len() as f64 * 0.2;
     let length_penalty = (req.content.chars().count() as f64).min(1000.0) / 1000.0;
-    let severity = (base + length_penalty * cfg.text_moderation_sensitivity)
-        .clamp(0.0, 1.0);
+    let severity = (base + length_penalty * cfg.text_moderation_sensitivity).clamp(0.0, 1.0);
 
     let mut all_matches = blocked.clone();
     all_matches.extend(flagged);

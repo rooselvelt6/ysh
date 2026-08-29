@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 
 use crate::auth::jwt::AuthUser;
@@ -12,9 +12,10 @@ pub async fn update_profile(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let display_name = req["display_name"].as_str().unwrap_or("");
     let bio = req["bio"].as_str().unwrap_or("");
@@ -53,9 +54,10 @@ pub async fn get_my_profile(
     auth: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let user_id: i64 = auth.user_id.parse().map_err(|_| {
-        (StatusCode::UNAUTHORIZED, "Invalid token".into())
-    })?;
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
 
     let profile = state
         .db
@@ -85,7 +87,10 @@ pub async fn search_users(
         .unwrap_or(20);
 
     if q.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "Query parameter 'q' required".into()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Query parameter 'q' required".into(),
+        ));
     }
 
     let users = state
