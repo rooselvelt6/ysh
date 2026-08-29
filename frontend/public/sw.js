@@ -1,7 +1,8 @@
 /* YSH — Service Worker (PWA + offline support)
    App shell precached; navigation is network-first with offline fallback;
-   static assets (pkg, styles, icons) are cache-first. */
-const CACHE = 'ysh-v6';
+   static assets (pkg, styles, icons) are network-first so deploys nuevos
+   SIEMPRE cargan el build actual (evita 401 por WASM viejo en cache). */
+const CACHE = 'ysh-v7';
 const SHELL = ['/', '/index.html', '/style.css', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -46,23 +47,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: stale-while-revalidate (sirve la cacheada y actualiza en
-  // background) para que los deploys nuevos de /pkg lleguen sin esperar el
-  // vencimiento del cache.
+  // Static assets: NETWORK-FIRST (siempre intenta la red primero; cachea la
+  // copia nueva) con fallback a cache solo si no hay red. Asi el build nuevo
+  // de /pkg se carga SIEMPRE y nunca se sirve el WASM viejo que causaba 401.
   if (url.pathname.startsWith('/pkg/') || SHELL.includes(url.pathname) || url.pathname.startsWith('/icon-')) {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        const network = fetch(request)
-          .then((res) => {
-            if (res.ok) {
-              const copy = res.clone();
-              caches.open(CACHE).then((cache) => cache.put(request, copy));
-            }
-            return res;
-          })
-          .catch(() => cached);
-        return cached || network;
-      })
+      fetch(request)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(request))
     );
   }
 });
