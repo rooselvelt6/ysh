@@ -1,7 +1,7 @@
 /* YSH — Service Worker (PWA + offline support)
    App shell precached; navigation is network-first with offline fallback;
    static assets (pkg, styles, icons) are cache-first. */
-const CACHE = 'ysh-v2';
+const CACHE = 'ysh-v3';
 const SHELL = ['/', '/index.html', '/style.css', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

@@ -591,6 +591,9 @@ mod moment_tests {
         let comments = db.get_moment_comments(mid).unwrap();
         assert_eq!(comments.len(), 1);
         assert_eq!(comments[0]["content"], "Great post!");
+
+        let feed = db.get_moment_feed(id, 0, 10).unwrap();
+        assert_eq!(feed[0]["comments"], 1, "el feed debe reflejar el numero real de comentarios");
     }
 
     #[test]

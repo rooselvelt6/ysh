@@ -669,12 +669,10 @@ async fn spa_fallback(
     };
 
     if file_path.is_file() {
-        if let Ok(resp) = ServeDir::new(&static_dir)
+        let resp = ServeDir::new(&static_dir)
             .oneshot(request)
-            .await
-        {
-            return resp.into_response();
-        }
+            .await;
+        return resp.into_response();
     }
 
     match tokio::fs::read(root.join("index.html")).await {

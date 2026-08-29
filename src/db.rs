@@ -1774,15 +1774,17 @@ impl Database {
             .collect();
 
         let likes_table = self.mm_get_all_entries(MM_MOMENT_LIKE)?;
+        let comments_table = self.mm_get_all_entries(MM_MOMENT_COMMENT)?;
         let results: Vec<serde_json::Value> = visible.into_iter().skip(offset as usize).take(limit as usize).map(|m| {
             let like_key = format!("{}_{}", user_id, m.id);
             let liked = likes_table.iter().any(|(k, _)| k == &like_key);
             let suffix = format!("_{}", m.id);
             let likes_count = likes_table.iter().filter(|(k, _)| k.ends_with(&suffix)).count() as i64;
+            let comments_count = comments_table.iter().filter(|(k, _)| k.as_str() == m.id.to_string()).count() as i64;
             let username = self.find_user_by_id(m.user_id).ok().flatten().map(|u| u.username).unwrap_or_default();
             serde_json::json!({
                 "id": m.id, "content": m.content, "media_url": m.media_url, "media_type": m.media_type,
-                "username": username, "likes": likes_count, "comments": m.comments_count,
+                "username": username, "likes": likes_count, "comments": comments_count,
                 "created_at": m.created_at, "liked": liked
             })
         }).collect();
