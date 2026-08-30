@@ -282,6 +282,32 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/admin/user/{user_id}/badge/{badge_type}",
             axum::routing::delete(crate::api::moderation::revoke_badge),
+        )
+        .route("/admin/wallets", get(crate::api::admin::admin_wallets))
+        .route(
+            "/admin/transactions",
+            get(crate::api::admin::admin_transactions),
+        )
+        .route("/admin/moments", get(crate::api::admin::admin_moments))
+        .route(
+            "/admin/moment/{moment_id}/delete",
+            post(crate::api::admin::admin_delete_moment),
+        )
+        .route("/admin/receipts", get(crate::api::admin::admin_receipts))
+        .route("/admin/calls", get(crate::api::admin::admin_calls))
+        .route("/admin/payouts", get(crate::api::admin::admin_payouts))
+        .route("/admin/fraud", get(crate::api::admin::admin_fraud))
+        .route(
+            "/admin/fraud/{alert_id}/resolve",
+            post(crate::api::admin::admin_resolve_fraud),
+        )
+        .route(
+            "/admin/wallet/{user_id}/adjust",
+            post(crate::api::admin::admin_adjust_balance),
+        )
+        .route(
+            "/admin/agency/{agency_id}/members/{user_id}",
+            axum::routing::delete(crate::api::admin::admin_remove_agency_member),
         );
 
     let social_routes = Router::new()

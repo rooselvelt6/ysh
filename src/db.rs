@@ -1188,6 +1188,8 @@ impl Database {
                 results.push(serde_json::json!({
                     "id": user.id, "username": user.username, "email": user.email,
                     "role": user.role, "created_at": user.created_at, "kyc_level": user.kyc_level,
+                    "banned": user.locked_until.as_deref().is_some(),
+                    "locked_until": user.locked_until,
                 }));
                 if results.len() as i64 >= limit {
                     break;
@@ -1211,25 +1213,112 @@ impl Database {
     }
 
     pub fn get_agency(&self, agency_id: i64) -> Result<Option<serde_json::Value>> {
-        self.get_json(T_AGENCY, &agency_id.to_string())
+        let mut agency =
+            match self.get_json::<serde_json::Value>(T_AGENCY, &agency_id.to_string())? {
+            Some(a) => a,
+            None => return Ok(None),
+        };
+        let members = self.get_agency_members(agency_id)?;
+        agency["members"] = serde_json::Value::Array(members.clone());
+        agency["member_count"] = serde_json::json!(members.len());
+        Ok(Some(agency))
     }
 
     pub fn list_agencies(&self) -> Result<Vec<serde_json::Value>> {
         let txn = self.inner.begin_read()?;
         let t = txn.open_table(T_AGENCY)?;
-        let mut results = Vec::new();
+        let mut agencies = Vec::new();
         for entry in t.iter()? {
             let (_, v) = entry?;
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(v.value()) {
-                results.push(val);
+                agencies.push(val);
             }
+        }
+        drop(t);
+        drop(txn);
+        let mut results = Vec::new();
+        for mut agency in agencies {
+            let id = agency["id"].as_i64().unwrap_or(0);
+            let members = self.get_agency_members(id)?;
+            agency["members"] = serde_json::Value::Array(members.clone());
+            agency["member_count"] = serde_json::json!(members.len());
+            results.push(agency);
         }
         Ok(results)
     }
 
+    /// Add a member to an agency. Fails if the user is already a member
+    /// (duplicate membership prevention), atomically under the write lock.
     pub fn add_agency_member(&self, agency_id: i64, user_id: i64, role: &str) -> Result<()> {
+        let _lock = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
         let member = serde_json::json!({"user_id": user_id, "role": role, "joined_at": now()});
-        self.mm_add(MM_AGENCY_MEMBER, &agency_id.to_string(), &to_json(&member))
+        let member_str = to_json(&member);
+        let key = agency_id.to_string();
+        let txn = self.inner.begin_write()?;
+        let mut found = false;
+        {
+            let t = txn.open_multimap_table(MM_AGENCY_MEMBER)?;
+            let iter = t.get(key.as_str())?;
+            for item in iter {
+                if let Ok(m) = serde_json::from_str::<serde_json::Value>(item?.value()) {
+                    if m["user_id"].as_i64() == Some(user_id) {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if found {
+            return Err(anyhow::anyhow!("User is already a member of this agency"));
+        }
+        {
+            let mut t = txn.open_multimap_table(MM_AGENCY_MEMBER)?;
+            t.insert(key.as_str(), member_str.as_str())?;
+        }
+        txn.commit()?;
+        Ok(())
+    }
+
+    /// Remove a member from an agency (duplicates removed). Fails if the
+    /// agency would be left without members.
+    pub fn remove_agency_member(&self, agency_id: i64, user_id: i64) -> Result<usize> {
+        let _lock = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Write lock poisoned"))?;
+        let key = agency_id.to_string();
+        let mut removed = 0usize;
+        let txn = self.inner.begin_write()?;
+        {
+            let t = txn.open_multimap_table(MM_AGENCY_MEMBER)?;
+            let iter = t.get(key.as_str())?;
+            let count = iter.count();
+            if count <= 1 {
+                return Err(anyhow::anyhow!(
+                    "Cannot remove the last member of an agency"
+                ));
+            }
+        }
+        {
+            let mut t = txn.open_multimap_table(MM_AGENCY_MEMBER)?;
+            let targets: Vec<String> = t
+                .get(key.as_str())?
+                .map(|item| item.map(|i| i.value().to_string()))
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            for val in targets {
+                if let Ok(m) = serde_json::from_str::<serde_json::Value>(&val) {
+                    if m["user_id"].as_i64() == Some(user_id) {
+                        t.remove(key.as_str(), val.as_str())?;
+                        removed += 1;
+                    }
+                }
+            }
+        }
+        txn.commit()?;
+        Ok(removed)
     }
 
     pub fn get_agency_members(&self, agency_id: i64) -> Result<Vec<serde_json::Value>> {
@@ -1440,6 +1529,60 @@ impl Database {
             .mm_get_all(MM_TRANSACTION, &user_id.to_string())?
             .iter()
             .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+            .collect();
+        txs.sort_by(|a, b| b["id"].as_i64().cmp(&a["id"].as_i64()));
+        txs.truncate(limit as usize);
+        Ok(txs)
+    }
+
+    /// Admin: every wallet on the platform, enriched with the username.
+    pub fn list_wallets(&self) -> Result<Vec<serde_json::Value>> {
+        let txn = self.inner.begin_read()?;
+        let t = txn.open_table(T_WALLET)?;
+        let mut wallets = Vec::new();
+        for entry in t.iter()? {
+            let (k, v) = entry?;
+            if let Ok(w) = serde_json::from_str::<serde_json::Value>(v.value()) {
+                let uid: i64 = k.value().parse().unwrap_or(0);
+                wallets.push((uid, w));
+            }
+        }
+        drop(t);
+        drop(txn);
+        let out = wallets
+            .into_iter()
+            .map(|(uid, mut w)| {
+                let username = self
+                    .find_user_by_id(uid)
+                    .ok()
+                    .flatten()
+                    .map(|u| u.username)
+                    .unwrap_or_default();
+                w["user_id"] = serde_json::json!(uid);
+                w["username"] = serde_json::json!(username);
+                w
+            })
+            .collect();
+        Ok(out)
+    }
+
+    /// Admin: every transaction across all users, newest first.
+    pub fn list_all_transactions(&self, limit: i64) -> Result<Vec<serde_json::Value>> {
+        let entries = self.mm_get_all_entries(MM_TRANSACTION)?;
+        let mut txs: Vec<serde_json::Value> = entries
+            .iter()
+            .filter_map(|(uid, val)| {
+                let mut tx: serde_json::Value = serde_json::from_str(val).ok()?;
+                let uid: i64 = uid.parse().ok()?;
+                let username = self
+                    .find_user_by_id(uid)
+                    .ok()
+                    .flatten()
+                    .map(|u| u.username)
+                    .unwrap_or_default();
+                tx["username"] = serde_json::json!(username);
+                Some(tx)
+            })
             .collect();
         txs.sort_by(|a, b| b["id"].as_i64().cmp(&a["id"].as_i64()));
         txs.truncate(limit as usize);
@@ -1789,6 +1932,56 @@ impl Database {
             })
         }).collect();
         Ok(results)
+    }
+
+    /// Admin: every moment on the platform (no visibility filtering), enriched
+    /// with username, likes and comments. Newest first.
+    pub fn list_all_moments(&self, limit: i64) -> Result<Vec<serde_json::Value>> {
+        let txn = self.inner.begin_read()?;
+        let t = txn.open_multimap_table(MM_MOMENT)?;
+        let mut all: Vec<serde_json::Value> = Vec::new();
+        for entry in t.iter()? {
+            let (_, mut vals) = entry?;
+            for v in &mut vals {
+                if let Ok(m) = serde_json::from_str::<serde_json::Value>(v?.value()) {
+                    all.push(m);
+                }
+            }
+        }
+        drop(t);
+        drop(txn);
+        let likes = self.mm_get_all_entries(MM_MOMENT_LIKE)?;
+        let comments = self.mm_get_all_entries(MM_MOMENT_COMMENT)?;
+        let mut out: Vec<serde_json::Value> = all
+            .into_iter()
+            .map(|mut m| {
+                let mid = m["id"].as_i64().unwrap_or(0);
+                let uid = m["user_id"].as_i64().unwrap_or(0);
+                let username = self
+                    .find_user_by_id(uid)
+                    .ok()
+                    .flatten()
+                    .map(|u| u.username)
+                    .unwrap_or_default();
+                let like_suffix = format!("_{mid}");
+                let likes_count = likes
+                    .iter()
+                    .filter(|(k, _)| k.ends_with(&like_suffix))
+                    .count() as i64;
+                let comments_count = comments
+                    .iter()
+                    .filter(|(k, _)| k == &mid.to_string())
+                    .count() as i64;
+                m["username"] = serde_json::json!(username);
+                m["user_id"] = serde_json::json!(uid);
+                m["likes"] = serde_json::json!(likes_count);
+                m["comments"] = serde_json::json!(comments_count);
+                m
+            })
+            .collect();
+        out.sort_by(|a, b| b["id"].as_i64().cmp(&a["id"].as_i64()));
+        out.truncate(limit as usize);
+        Ok(out)
     }
 
     pub fn like_moment(&self, _user_id: i64, moment_id: i64) -> Result<()> {
@@ -2877,6 +3070,33 @@ impl Database {
         }))
     }
 
+    /// Admin: every WebRTC call record, newest first, enriched with the
+    /// caller's username.
+    pub fn list_calls_all(&self, limit: i64) -> Result<Vec<serde_json::Value>> {
+        let txn = self.inner.begin_read()?;
+        let t = txn.open_table(T_CALL)?;
+        let mut out = Vec::new();
+        for entry in t.iter()? {
+            let (_, v) = entry?;
+            if let Ok(c) = serde_json::from_str::<CallRecord>(v.value()) {
+                let username = self
+                    .find_user_by_id(c.host_id)
+                    .ok()
+                    .flatten()
+                    .map(|u| u.username)
+                    .unwrap_or_default();
+                let mut value = serde_json::to_value(&c)?;
+                value["host_username"] = serde_json::json!(username);
+                out.push(value);
+            }
+        }
+        drop(t);
+        drop(txn);
+        out.sort_by(|a, b| b["started_at"].as_str().cmp(&a["started_at"].as_str()));
+        out.truncate(limit as usize);
+        Ok(out)
+    }
+
     // ═══════════════════════════════════════════
     // PHASE 8: QUALITY METRICS
     // ═══════════════════════════════════════════
@@ -3269,6 +3489,32 @@ impl Database {
         }).collect::<Vec<_>>().pipe(Ok)
     }
 
+    /// Admin: every payout across all statuses (pending, processing, paid,
+    /// rejected), newest first.
+    pub fn list_payouts_all(&self) -> Result<Vec<serde_json::Value>> {
+        let entries = self.mm_get_all_entries(MM_PAYOUT)?;
+        let mut out: Vec<serde_json::Value> = entries
+            .iter()
+            .filter_map(|(_, val)| {
+                let p: Payout = serde_json::from_str(val).ok()?;
+                let username = self
+                    .find_user_by_id(p.user_id)
+                    .ok()
+                    .flatten()
+                    .map(|u| u.username)
+                    .unwrap_or_default();
+                Some(serde_json::json!({
+                    "id": p.id, "user_id": p.user_id, "username": username,
+                    "amount": p.amount, "currency": p.currency, "status": p.status,
+                    "wallet_address": p.wallet_address, "network": p.network,
+                    "tx_hash": p.tx_hash, "requested_at": p.requested_at, "processed_at": p.processed_at
+                }))
+            })
+            .collect();
+        out.sort_by(|a, b| b["id"].as_i64().cmp(&a["id"].as_i64()));
+        Ok(out)
+    }
+
     // ═══════════════════════════════════════════
     // PHASE 9: FRAUD
     // ═══════════════════════════════════════════
@@ -3323,6 +3569,17 @@ impl Database {
             }
         }
         Ok(())
+    }
+
+    /// Admin: every fraud alert, newest first.
+    pub fn list_fraud_alerts_all(&self) -> Result<Vec<serde_json::Value>> {
+        let entries = self.mm_get_all_entries(MM_FRAUD)?;
+        let mut out: Vec<serde_json::Value> = entries
+            .iter()
+            .filter_map(|(_, val)| serde_json::from_str::<serde_json::Value>(val).ok())
+            .collect();
+        out.sort_by(|a, b| b["id"].as_i64().cmp(&a["id"].as_i64()));
+        Ok(out)
     }
 
     pub fn check_velocity(
@@ -3405,6 +3662,30 @@ impl Database {
             .take(limit as usize)
             .collect::<Vec<_>>()
             .pipe(Ok)
+    }
+
+    /// Admin: every receipt across all users, newest first, enriched with
+    /// the username.
+    pub fn list_receipts_all(&self, limit: i64) -> Result<Vec<serde_json::Value>> {
+        let entries = self.mm_get_all_entries(MM_RECEIPT)?;
+        let mut out: Vec<serde_json::Value> = entries
+            .iter()
+            .filter_map(|(uid, val)| {
+                let mut r = serde_json::from_str::<serde_json::Value>(val).ok()?;
+                let uid: i64 = uid.parse().ok()?;
+                let username = self
+                    .find_user_by_id(uid)
+                    .ok()
+                    .flatten()
+                    .map(|u| u.username)
+                    .unwrap_or_default();
+                r["username"] = serde_json::json!(username);
+                Some(r)
+            })
+            .collect();
+        out.sort_by(|a, b| b["id"].as_i64().cmp(&a["id"].as_i64()));
+        out.truncate(limit as usize);
+        Ok(out)
     }
 
     pub fn verify_receipt(&self, receipt_id: i64) -> Result<bool> {

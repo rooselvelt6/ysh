@@ -1,19 +1,23 @@
 use leptos::prelude::*;
-use leptos_router::*;
+use leptos_router::components::Outlet;
+use leptos_router::hooks::use_navigate;
 use crate::store;
 
 #[component]
 pub fn ProtectedRoute() -> impl IntoView {
-    let logged_in = Memo::new(move |_| store::is_logged_in());
+    let navigate = use_navigate();
+
+    Effect::new(move |_| {
+        if !store::is_logged_in() {
+            navigate("/login", Default::default());
+        }
+    });
+
+    let logged_in = move || store::is_logged_in();
 
     view! {
-        {move || {
-            if logged_in.get() {
-                view! { <Outlet/> }.into_any()
-            } else {
-                navigate("/login");
-                view! { <div>"Redirecting..."</div> }.into_any()
-            }
-        }}
+        <Show when=logged_in fallback=|| ()>
+            <Outlet/>
+        </Show>
     }
 }

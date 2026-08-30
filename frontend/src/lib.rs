@@ -7,6 +7,7 @@ use leptos::prelude::*;
 use leptos_router::{components::*, path};
 
 use crate::components::ui::toast::{ToastCtx, ToastContainer};
+use crate::components::protected::ProtectedRoute;
 use crate::components::layout::sidebar::Sidebar;
 use crate::components::layout::right_sidebar::RightSidebar;
 use crate::components::layout::bottom_nav::BottomNav;
@@ -48,18 +49,20 @@ pub fn App() -> impl IntoView {
                 <Route path=path!("/register") view=RegisterPage/>
                 <Route path=path!("/2fa") view=TwoFactorPage/>
                 <Route path=path!("/recovery") view=ForgotPasswordPage/>
-                <Route path=path!("/") view=Home/>
-                <Route path=path!("/discover") view=DiscoverShell/>
-                <Route path=path!("/wallet") view=WalletShell/>
-                <Route path=path!("/profile") view=ProfileShell/>
-                <Route path=path!("/moments") view=MomentsShell/>
-                <Route path=path!("/gifts") view=GiftsShell/>
-                <Route path=path!("/hosts") view=HostsShell/>
-                <Route path=path!("/agency") view=AgencyShell/>
-                <Route path=path!("/chat") view=ChatShell/>
-                <Route path=path!("/notifications") view=NotificationsShell/>
-                <Route path=path!("/stream") view=StreamShell/>
-                <Route path=path!("/admin") view=AdminShell/>
+                <ParentRoute path=path!("/") view=ProtectedRoute>
+                    <Route path=path!("/") view=Home/>
+                    <Route path=path!("discover") view=DiscoverShell/>
+                    <Route path=path!("wallet") view=WalletShell/>
+                    <Route path=path!("profile") view=ProfileShell/>
+                    <Route path=path!("moments") view=MomentsShell/>
+                    <Route path=path!("gifts") view=GiftsShell/>
+                    <Route path=path!("hosts") view=HostsShell/>
+                    <Route path=path!("agency") view=AgencyShell/>
+                    <Route path=path!("chat") view=ChatShell/>
+                    <Route path=path!("notifications") view=NotificationsShell/>
+                    <Route path=path!("stream") view=StreamShell/>
+                    <Route path=path!("admin") view=AdminShell/>
+                </ParentRoute>
             </Routes>
         </Router>
     }

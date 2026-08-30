@@ -22,7 +22,7 @@ pub fn Sidebar() -> impl IntoView {
         ("/profile", "\u{1F464}", "Profile"),
     ];
     if store::get_user().map(|u| u.role == "admin").unwrap_or(false) {
-        nav_items.push(("/admin", "\u{1F4CA}", "Analytics"));
+        nav_items.push(("/admin", "\u{1F6E1}\u{FE0F}", "Admin"));
     }
 
     view! {
@@ -71,7 +71,7 @@ pub fn Sidebar() -> impl IntoView {
                         {move || store::get_user().map(|u| u.username.clone()).unwrap_or_else(|| "Guest".into())}
                     </div>
                     <div style="color:var(--text-dim);font-size:0.8125rem;">
-                        "@user"
+                        {move || store::get_user().map(|u| format!("@{}", u.username)).unwrap_or_else(|| "@user".into())}
                     </div>
                 </div>
                 <button

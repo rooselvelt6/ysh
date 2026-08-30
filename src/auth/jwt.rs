@@ -19,21 +19,40 @@ where
     type Rejection = StatusCode;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let _path = parts.uri.path().to_string();
         let auth_header = parts
             .headers
             .get("authorization")
-            .and_then(|v| v.to_str().ok())
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+            .and_then(|v| v.to_str().ok());
 
-        let token = auth_header
-            .strip_prefix("Bearer ")
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+        let Some(auth_header) = auth_header else {
+            tracing::warn!(path = %_path, "AUTH-DEBUG: no authorization header");
+            return Err(StatusCode::UNAUTHORIZED);
+        };
+
+        let token = match auth_header.strip_prefix("Bearer ") {
+            Some(t) => t,
+            None => {
+                tracing::warn!(path = %_path, header = %auth_header, "AUTH-DEBUG: missing Bearer prefix");
+                return Err(StatusCode::UNAUTHORIZED);
+            }
+        };
 
         let secret =
             std::env::var("YSH_JWT_SECRET").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-        let claims =
-            validate_token(token, secret.as_bytes()).map_err(|_| StatusCode::UNAUTHORIZED)?;
+        let claims = match validate_token(token, secret.as_bytes()) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!(
+                    path = %_path,
+                    token_preview = &token[..token.len().min(80)],
+                    err = %e,
+                    "AUTH-DEBUG: token rejected"
+                );
+                return Err(StatusCode::UNAUTHORIZED);
+            }
+        };
 
         if claims.kind == "2fa_pending" {
             return Err(StatusCode::UNAUTHORIZED);

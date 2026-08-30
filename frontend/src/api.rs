@@ -99,18 +99,22 @@ async fn send(
     let do_request = |url: String, token: Option<&str>| -> Result<gloo_net::http::Request, ApiError> {
         let mut builder = match method_c {
             gloo_net::http::Method::GET => Request::get(&url),
+            gloo_net::http::Method::DELETE => Request::delete(&url),
             _ => Request::post(&url),
-        }
-        .header("Content-Type", "application/json");
+        };
         if let Some(token) = token {
             builder = builder.header("Authorization", token);
         }
         match &body_c {
+            // Solo adjuntar body a metodos que lo permiten. Un GET/DELETE con
+            // body (aunque sea vacio) lanza un TypeError en el navegador:
+            // "Request with GET/HEAD method cannot have body".
             Some(json) => builder
+                .header("Content-Type", "application/json")
                 .body(json.clone())
                 .map_err(|e| ApiError::Network(format!("Body error: {e:?}"))),
             None => builder
-                .body("")
+                .build()
                 .map_err(|e| ApiError::Network(format!("Body error: {e:?}"))),
         }
     };
@@ -171,6 +175,20 @@ pub async fn get<T: DeserializeOwned>(path: &str) -> Result<T, ApiError> {
 pub fn go(path: &str) {
     if let Some(win) = web_sys::window() {
         let _ = win.location().set_href(path);
+    }
+}
+
+pub async fn del<T: DeserializeOwned>(path: &str) -> Result<T, ApiError> {
+    let resp = send(gloo_net::http::Method::DELETE, path, None).await?;
+
+    if resp.ok() {
+        resp.json::<T>()
+            .await
+            .map_err(|e| ApiError::Deserialize(format!("{e:?}")))
+    } else {
+        let status = resp.status();
+        let msg = resp.text().await.unwrap_or_default();
+        Err(ApiError::Server { status, message: msg })
     }
 }
 

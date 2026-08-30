@@ -181,11 +181,26 @@ pub async fn login(
     })))
 }
 
-pub async fn me(auth: crate::auth::jwt::AuthUser) -> Json<serde_json::Value> {
-    Json(serde_json::json!({
+pub async fn me(
+    auth: crate::auth::jwt::AuthUser,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user_id: i64 = auth
+        .user_id
+        .parse()
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token".into()))?;
+    let username = state
+        .db
+        .find_user_by_id(user_id)
+        .ok()
+        .flatten()
+        .map(|u| u.username)
+        .unwrap_or_default();
+    Ok(Json(serde_json::json!({
         "user_id": auth.user_id,
         "role": auth.role,
-    }))
+        "username": username,
+    })))
 }
 
 #[derive(Deserialize)]

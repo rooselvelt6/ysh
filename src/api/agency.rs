@@ -88,7 +88,13 @@ pub async fn add_member(
     state
         .db
         .add_agency_member(agency_id, target_user_id, role)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            if e.to_string().contains("already a member") {
+                (StatusCode::CONFLICT, e.to_string())
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+            }
+        })?;
 
     Ok(Json(serde_json::json!({
         "message": "Member added",

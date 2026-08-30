@@ -9,6 +9,12 @@ pub fn LoginPage() -> impl IntoView {
     let (error, set_error) = signal(Option::<String>::None);
     let (loading, set_loading) = signal(false);
 
+    Effect::new(move |_| {
+        if store::is_logged_in() {
+            api::go("/");
+        }
+    });
+
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         set_error.set(None);
